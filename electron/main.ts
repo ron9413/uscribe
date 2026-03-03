@@ -1,4 +1,4 @@
-import {app, BrowserWindow, ipcMain, safeStorage, globalShortcut, clipboard, Notification} from 'electron'
+import { app, BrowserWindow, ipcMain, safeStorage, globalShortcut, clipboard, Notification } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { createRequire } from 'module'
@@ -11,10 +11,10 @@ import { AIConfig, AIProvider, RevisionAction } from '../src/types'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const require = createRequire(import.meta.url)
-const robot = require ('robotjs') as typeof import ('robotjs')
+const robot = require('robotjs') as typeof import('robotjs')
 
 // Constants
-const NOTES_DIR = path.join (os.homedir(), 'Documents', 'Al-Notes')
+const NOTES_DIR = path.join (os.homedir(), 'Documents', 'uscribe')
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json')
 const KEYS_FILE = path.join(app.getPath('userData'), 'keys.json')
 
@@ -29,7 +29,7 @@ interface RevisionShortcutPayload {
     customPrompt?: string
 }
 
-function getDefaultConfig (): AIConfig {
+function getDefaultConfig(): AIConfig {
     return {
         providers: [],
         activeProvider: '',
@@ -51,8 +51,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 function sendSystemShortcut(action: 'copy' | 'paste'): void {
-    const key = action ==='copy'? 'c': 'v'
-    const modifier = process.platform === 'darwin'? 'command' : 'control'
+    const key = action === 'copy' ? 'c' : 'v'
+    const modifier = process.platform === 'darwin' ? 'command' : 'control'
     robot.keyTap(key, modifier)
 }
 
@@ -60,10 +60,10 @@ function showBackgroundRevisionNotification(title: string, body?: string): void 
     if (!Notification.isSupported()) return
 
     try {
-        const notification = new Notification ({title, body, silent: true})
+        const notification = new Notification({ title, body, silent: true })
         notification.show()
     } catch (error) {
-        console.error("Failed to show background revision notification:", error)
+        console.error('Failed to show background revision notification:', error)
     }
 }
 
@@ -101,7 +101,7 @@ async function loadConfigFromDisk(): Promise<AIConfig> {
                 : defaults.customRevisionShortcuts,
         }
     } catch (error) {
-        console.error("Error reading config from disk:", error)
+        console.error('Error reading config from disk:', error)
         return getDefaultConfig()
     }
 }
@@ -119,10 +119,10 @@ async function getApiKeyFromDisk(provider: string): Promise<string | null> {
             return null
         }
 
-        const encrypted = Buffer.from (keys[provider], 'base64')
+        const encrypted = Buffer.from(keys[provider], 'base64')
         return safeStorage.decryptString(encrypted)
     } catch (error) {
-        console.error (`Error getting API key from disk for provider "${provider}":`, error)
+        console.error(`Error getting API key from disk for provider "${provider}":`, error)
         return null
     }
 }
@@ -131,7 +131,7 @@ async function ensureActiveProviderReady(): Promise<string | null> {
     const config = await loadConfigFromDisk()
     const activeProviderName = config.activeProvider?.trim()
     if (!activeProviderName) {
-        console.error("No active provider configured for background revision")
+        console.error('No active provider configured for background revision')
         return null
     }
 
@@ -198,7 +198,7 @@ async function runBackgroundRevisionShortcut(payload: RevisionShortcutPayload) {
         await sleep(PASTE_WAIT_MS)
         showBackgroundRevisionNotification('AI Notes', 'Revision complete.')
     } catch (error) {
-        console.error ('Background revision shortcut failed:', error)
+        console.error('Background revision shortcut failed:', error)
         showBackgroundRevisionNotification('AI Notes', 'Background revision failed.')
     } finally {
         clipboard.writeText(originalClipboardText)
@@ -208,7 +208,7 @@ async function runBackgroundRevisionShortcut(payload: RevisionShortcutPayload) {
 async function registerGlobalShortcuts(config?: AIConfig) {
     globalShortcut.unregisterAll()
 
-    const activeConfig = config?? (await loadConfigFromDisk())
+    const activeConfig = config ?? (await loadConfigFromDisk())
     const baseShortcuts: Array<{
         accelerator: string
         label: string
@@ -228,7 +228,7 @@ async function registerGlobalShortcuts(config?: AIConfig) {
         : []
     const extraShortcuts = customShortcuts
         .filter(item => (item.scope === 'global' ? 'global' : 'local') === 'global')
-        .map (item => ({
+        .map(item => ({
             accelerator: item.accelerator,
             label: item.name || 'Custom Shortcut',
             payload: {
@@ -296,7 +296,7 @@ function createWindow() {
         mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
         mainWindow.webContents.openDevTools()
     } else {
-        mainWindow.loadFile(path.join(__dirname, './dist/index.html'))
+        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
     }
 
     mainWindow.on('closed', () => {
@@ -330,19 +330,19 @@ ipcMain.handle('write-note', async (_, note: any) => {
     }
 })
 
-ipcMain.handle ('delete-note', async (_, id: string) => {
+ipcMain.handle('delete-note', async (_, id: string) => {
     try {
-        const notePath = path.join (NOTES_DIR, `${id}.json`)
+        const notePath = path.join(NOTES_DIR, `${id}.json`)
         if (existsSync(notePath)) {
             await fs.unlink(notePath)
         }
     } catch (error) {
-        console.error ("Error deleting note:", error)
+        console.error('Error deleting note:', error)
         throw error
     }
 })
 
-ipcMain.handle ('list-notes', async () => {
+ipcMain.handle('list-notes', async () => {
     try {
         await ensureNotesDir()
         const files = await fs.readdir(NOTES_DIR)
@@ -378,18 +378,18 @@ ipcMain.handle('get-config', async () => {
 
 ipcMain.handle('save-config', async (_, config: any) => {
     try {
-        await fs.writeFile (CONFIG_FILE, JSON.stringify(config, null, 2))
+        await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2))
         await registerGlobalShortcuts(config as AIConfig)
     } catch (error) {
-        console.error ('Error saving config:', error)
+        console.error('Error saving config:', error)
         throw error
     }
 })
 
-ipcMain.handle ('store-api-key', async (_, provider: string, key: string) => {
+ipcMain.handle('store-api-key', async (_, provider: string, key: string) => {
     try {
         if (!safeStorage.isEncryptionAvailable()) {
-            throw new Error ('Encryption not available')
+            throw new Error('Encryption not available')
         }
 
         let keys: Record<string, string> = {}
@@ -403,7 +403,7 @@ ipcMain.handle ('store-api-key', async (_, provider: string, key: string) => {
 
         await fs.writeFile(KEYS_FILE, JSON.stringify(keys, null, 2))
     } catch (error) {
-        console.error ('Error storing API key:', error)
+        console.error('Error storing API key:', error)
         throw error
     }
 })
@@ -412,24 +412,24 @@ ipcMain.handle('get-api-key', async (_, provider: string) => {
     return getApiKeyFromDisk(provider)
 })
 
-//App lifecycle
+// App lifecycle
 app.whenReady().then(() => {
     createWindow()
     void registerGlobalShortcuts()
 
-    app.on ('activate', () => {
+    app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createWindow()
         }
     })
 })
 
-app.on ('window-all-closed', () => {
+app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit()
     }
 })
 
-app.on ('will-quit', () => {
+app.on('will-quit', () => {
     globalShortcut.unregisterAll()
 })

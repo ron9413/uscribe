@@ -4,8 +4,8 @@ export interface ParsedShortcut {
 }
 
 const MODIFIER_ALIASES: Record<string, string> = {
-    command: 'Command',
     cmd: 'Command',
+    command: 'Command',
     meta: 'Command',
     ctrl: 'Control',
     control: 'Control',
@@ -19,30 +19,30 @@ const MODIFIER_ALIASES: Record<string, string> = {
 const MODIFIER_ORDER = ['CommandOrControl', 'Command', 'Control', 'Alt', 'Shift']
 
 const KEY_ALIASES: Record<string, string> = {
-    esc: "Escape",
-    escape: "Escape",
-    enter: "Enter",
-    return: "Enter",
-    tab: "Tab",
-    space: "Space",
-    backspace: "Backspace",
-    delete: "Delete",
-    del: "Delete",
-    up: "Up",
-    down: "Down",
-    left: "Left",
-    right: "Right",
-    home: "Home",
-    end: "End",
-    pageup: "PageUp",
-    pagedown: "PageDown",
+    esc: 'Escape',
+    escape: 'Escape',
+    enter: 'Enter',
+    return: 'Enter',
+    tab: 'Tab',
+    space: 'Space',
+    backspace: 'Backspace',
+    delete: 'Delete',
+    del: 'Delete',
+    up: 'Up',
+    down: 'Down',
+    left: 'Left',
+    right: 'Right',
+    home: 'Home',
+    end: 'End',
+    pageup: 'PageUp',
+    pagedown: 'PageDown',
 }
 
 function normalizeShortcutKey(part: string): string | null {
     const value = part.trim()
     if (!value) return null
 
-    const alias = KEY_ALIASES [value.toLowerCase()]
+    const alias = KEY_ALIASES[value.toLowerCase()]
     if (alias) return alias
 
     if (/^f([1-9]|1[0-9]|2[0-4])$/i.test(value)) {
@@ -53,7 +53,7 @@ function normalizeShortcutKey(part: string): string | null {
         return value.toUpperCase()
     }
 
-    if (/^[0-9]$/.test (value)) {
+    if (/^[0-9]$/.test(value)) {
         return value
     }
 
@@ -89,7 +89,7 @@ export function parseShortcutInput(input: string): ParsedShortcut {
             return {
                 accelerator: '',
                 error:
-                    'Unsupported key. Use letters, numbers, function keys, or Enter/Escape/Tab/Space.'
+                    'Unsupported key. Use letters, numbers, function keys, or Enter/Escape/Tab/Space.',
             }
         }
     }
@@ -98,7 +98,7 @@ export function parseShortcutInput(input: string): ParsedShortcut {
         return { accelerator: '', error: 'Shortcut must include a non-modifier key.' }
     }
 
-    if (modifiers.size == 0) {
+    if (modifiers.size === 0) {
         return { accelerator: '', error: 'Shortcut must include at least one modifier.' }
     }
 
@@ -134,7 +134,7 @@ function expectedModifierState(modifiers: Set<string>) {
     const expectCtrl = modifiers.has('Control') || (!isMac && modifiers.has('CommandOrControl'))
     const expectAlt = modifiers.has('Alt')
     const expectShift = modifiers.has('Shift')
-    return {expectMeta, expectCtrl, expectAlt, expectShift}
+    return { expectMeta, expectCtrl, expectAlt, expectShift }
 }
 
 function keyMatches(event: KeyboardEvent, key: string): boolean {
@@ -172,12 +172,12 @@ function keyMatches(event: KeyboardEvent, key: string): boolean {
 }
 
 export function matchesAccelerator(event: KeyboardEvent, accelerator: string): boolean {
-    const {modifiers, key} = acceleratorParts(accelerator)
+    const { modifiers, key } = acceleratorParts(accelerator)
     if (!key) return false
     
     const { expectMeta, expectCtrl, expectAlt, expectShift } = expectedModifierState(modifiers)
-    if (event.metaKey != expectMeta) return false
-    if (event.ctrlKey != expectCtrl) return false
+    if (event.metaKey !== expectMeta) return false
+    if (event.ctrlKey !== expectCtrl) return false
     if (event.altKey !== expectAlt) return false
     if (event.shiftKey !== expectShift) return false
 
@@ -216,7 +216,7 @@ export function acceleratorToDisplay(accelerator: string): string {
         Left: isMac ? '←' : 'Left',
         Right: isMac ? '→' : 'Right',
         PageUp: 'PgUp',
-        PageDown : 'PgDn',
+        PageDown: 'PgDn',
     }
 
     const keyLabel = keyLabelMap[key] || key

@@ -15,7 +15,7 @@ function InlineDiffPreview({
     result,
     onAccept,
     onReject,
-    isLoading
+    isLoading,
 }: InlineDiffPreviewProps) {
     const [editedText, setEditedText] = useState(result.revised)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -28,7 +28,7 @@ function InlineDiffPreview({
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto'
-            textareaRef.current.style.height = textareaRef.current.scrollHeight + "px"
+            textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
         }
     }, [editedText])
 

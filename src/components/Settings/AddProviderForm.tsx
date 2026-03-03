@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { AIProvider } from '../../types'
 
 interface AddProviderFormProps {
-    onAdd: (provider: AIProvider, apikey: string) => void
+    onAdd: (provider: AIProvider, apiKey: string) => void
     onCancel: () => void
     isLoading: boolean
     editingProvider?: AIProvider
@@ -78,7 +78,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
         const k = 1024
         const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
         const i = Math.floor(Math.log(bytes) / Math.log(k))
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
     }
 
     const confirmPullModel = async () => {
@@ -154,7 +154,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
             newErrors.apiKey = 'API key is required'
         }
 
-        if (!formData.model.trim()) {
+        if (!formData.model) {
             newErrors.model = 'Model is required'
         }
 
@@ -245,7 +245,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                         <label className="block text-sm font-medium mb-1">
                             API Key
                             {isEditMode && (
-                                <span className="text-sm text-gray-500 ml-2">
+                                <span className="text-xs text-gray-500 ml-2">
                                     (leave empty to keep existing)
                                 </span>
                             )}
@@ -365,8 +365,8 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                                     className="flex-1 px-3 py-2 border border-gray-300 rounded outline-none text-sm"
                                     onKeyPress={(e) => {
                                         if (e.key === 'Enter' && modelToPull.trim()) {
-                                            e.preventDefault();
-                                            setShowPullDialog(true);
+                                            e.preventDefault()
+                                            setShowPullDialog(true)
                                         }
                                     }}
                                 />
@@ -374,7 +374,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                                     type="button"
                                     onClick={() => {
                                         if (modelToPull.trim()) {
-                                            setShowPullDialog(true);
+                                            setShowPullDialog(true)
                                         }
                                     }}
                                     disabled={!modelToPull.trim()}
@@ -391,7 +391,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                                     rel="noopener noreferrer"
                                     className="text-blue-500 hover:underline font-medium"
                                 >
-                                    Ollama.com/library
+                                    ollama.com/library
                                 </a>
                             </div>
                         </div>
@@ -400,7 +400,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                     <div>
                         <label className="block text-sm font-medium mb-1">
                             Model
-                            <span className="text-xs text-gray-500 ml-2"> (select or type custom) </span>
+                            <span className="text-xs text-gray-500 ml-2">(select or type custom)</span>
                         </label>
                         <input
                             type="text"
@@ -461,7 +461,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                                 This will download the model to your local machine.
                                 The download may take several minutes depending on your internet speed and the model size.
                             </p>
-                            <p className="text-sm text-gray-400 mt-2">
+                            <p className="text-xs text-gray-400 mt-2">
                                 Tip: Check the model size at{' '}
                                 <a
                                     href={`https://ollama.com/library/${modelToPull.split(':')[0]}`}
@@ -469,7 +469,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                                     rel="noopener noreferrer"
                                     className="text-blue-500 hover:underline"
                                 >
-                                    Ollama.com/library/{modelToPull.split(':')[0]}
+                                    ollama.com/library/{modelToPull.split(':')[0]}
                                 </a>
                             </p>
                         </div>
@@ -478,7 +478,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
                                 <p className="text-sm text-blue-700">{pullProgress}</p>
                                 <div className="mt-2 w-full bg-blue-200 rounded-full h-2">
-                                    <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: `100%` }}></div>
+                                    <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '100%' }}></div>
                                 </div>
                             </div>
                         )}

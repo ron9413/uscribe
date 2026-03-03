@@ -30,12 +30,12 @@ function sanitizeAutocompleteOutput(raw: string): string {
         cleaned = cleaned.slice(markerIndex + holeMarker.length)
     }
 
-    const continuationHeaderIndex = cleaned.indexOf('\n\nContinuation: ')
+    const continuationHeaderIndex = cleaned.indexOf('\n\nContinuation:')
     if (continuationHeaderIndex !== -1) {
         cleaned = cleaned.slice(0, continuationHeaderIndex)
     }
 
-    cleaned = cleaned.replace(/~Continuation: \s*/i, '')
+    cleaned = cleaned.replace(/^Continuation:\s*/i, '')
 
     return cleaned
  }
@@ -71,7 +71,7 @@ export function useAutoComplete(
         }
 
         if (!fullText.trim()) {
-            console.log("No context available")
+            console.log('No context available')
             setSuggestion('')
             return
         }
@@ -177,8 +177,8 @@ export function useAutoComplete(
         } catch (error: any) {
             if (error.name !== 'AbortError') {
                 console.error('Auto-complete error:', error)
-                setSuggestion('')
             }
+            setSuggestion('')
         } finally {
             if (requestId === activeRequestIdRef.current) {
                 setIsLoading(false)
@@ -243,7 +243,7 @@ export function useAutoComplete(
         lastRejectionRef.current = {
             timestamp: Date.now(),
             textLength: fullText.length,
-            text: fullText,
+            text: fullText
         }
 
         setSuggestion('')
@@ -257,6 +257,6 @@ export function useAutoComplete(
         suggestion,
         isLoading,
         accept,
-        reject
+        reject,
     }
 }

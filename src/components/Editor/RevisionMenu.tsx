@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef } from 'react'
 import { CustomRevisionShortcut, RevisionAction } from '../../types'
 import { acceleratorToDisplay } from '../../utils/shortcutUtils'
 
@@ -61,7 +61,7 @@ function RevisionMenu({
             label: item.name || 'Custom Shortcut',
             shortcut: acceleratorToDisplay(item.accelerator),
             prompt: item.prompt,
-        }))
+        })),
     ]
 
     const handleCustomSubmit = () => {

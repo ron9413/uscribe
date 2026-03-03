@@ -85,7 +85,7 @@ export function useTextRevision(options: UseTextRevisionOptions) {
             return revised
         } catch (error) {
             if (
-                error instanceof Error && error.name === 'AbortError' ||
+                (error instanceof Error && error.name === 'AbortError') ||
                 requestController.signal.aborted ||
                 activeRequestIdRef.current !== requestId
             ) {
@@ -95,7 +95,7 @@ export function useTextRevision(options: UseTextRevisionOptions) {
             console.error('Revision error:', error)
             throw error
         } finally {
-            if (activeRequestIdRef.current == requestId) {
+            if (activeRequestIdRef.current === requestId) {
                 setIsRevising(false)
                 abortControllerRef.current = null
             }
@@ -117,7 +117,7 @@ export function useTextRevision(options: UseTextRevisionOptions) {
 
     const acceptRevision = useCallback((editedText?: string) => {
         const result = revisionResult
-        const range = selectionRangeRef. current
+        const range = selectionRangeRef.current
         setRevisionResult(null)
         selectionRangeRef.current = null
 

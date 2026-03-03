@@ -18,7 +18,7 @@ function TitleBar({ title, onTitleChange, updatedAt }: TitleBarProps) {
     }, [title])
 
     useEffect(() => {
-        if (isEditing && inputRef.current && cursorPosition != null) {
+        if (isEditing && inputRef.current && cursorPosition !== null) {
             inputRef.current.setSelectionRange(cursorPosition, cursorPosition)
             setCursorPosition(null)
         }
@@ -57,7 +57,7 @@ function TitleBar({ title, onTitleChange, updatedAt }: TitleBarProps) {
         let position = 0
         for (let i = 0; i <= title.length; i++) {
             const textWidth = context.measureText(title.substring(0, i)).width
-            if (textWidth >= clickX) {
+            if (textWidth > clickX) {
                 // Check if we're closer to the previous or current character
                 const prevWidth = i > 0 ? context.measureText(title.substring(0, i - 1)).width : 0
                 const distToCurrent = Math.abs(textWidth - clickX)
@@ -88,12 +88,12 @@ function TitleBar({ title, onTitleChange, updatedAt }: TitleBarProps) {
         return date.toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
-            year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+            year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
         })
     }
 
     return (
-        <div className="border-b border-noteş-border px-16 cy-4 bg-white">
+        <div className="border-b border-notes-border px-16 py-4 bg-white">
             {isEditing ? (
                 <input
                     ref={inputRef}

@@ -12,7 +12,7 @@ import { aiService } from './services/aiService'
 function getDefaultApiKey(provider: AIProvider): string | null {
     switch (provider.type) {
         case 'ollama':
-            return 'ollama' // Ollama doesh't require authentication
+            return 'ollama' // Ollama doesn't require authentication
         // Add more provider types here that don't require real API keys
         default:
             return null
@@ -37,13 +37,13 @@ function App() {
     const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
 
     // Load notes list on mount
-    useEffect (() => {
+    useEffect(() => {
         loadNotes()
         loadConfig()
     }, [])
 
     // Clear toast timeout on unmount
-    useEffect (() => {
+    useEffect(() => {
         return () => {
             if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current)
             if (saveDebounceTimeoutRef.current) clearTimeout(saveDebounceTimeoutRef.current)
@@ -74,15 +74,15 @@ function App() {
         for (const provider of cfg.providers) {
             if (!aiService.hasProvider(provider.name)) {
                 try {
-                    let apikey = await storage.getApiKey(provider.name)
+                    let apiKey = await storage.getApiKey(provider.name)
 
                     // Use default key for providers that don't require authentication
-                    if (!apikey) {
-                        apikey = getDefaultApiKey(provider)
+                    if (!apiKey) {
+                        apiKey = getDefaultApiKey(provider)
                     }
     
-                    if (apikey) {
-                        await aiService.initializeProvider(provider, apikey)
+                    if (apiKey) {
+                        await aiService.initializeProvider(provider, apiKey)
                         console.log(`Initialized AI provider: ${provider.name}`)
                     } else {
                         console.warn(`No API key found for provider: ${provider.name}`)
@@ -211,7 +211,7 @@ function App() {
         setConfig(newConfig)
     }
 
-    const showToast = useCallback ((message: string) => {
+    const showToast = useCallback((message: string) => {
         if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current)
         setToastMessage(message)
         toastTimeoutRef.current = setTimeout(() => {
@@ -224,7 +224,7 @@ function App() {
         const nextEnabled = !config.autoCompleteEnabled
         saveConfig({
             ...config,
-            autoCompleteEnabled: nextEnabled
+            autoCompleteEnabled: nextEnabled,
         })
         showToast(nextEnabled ? 'Autocomplete on' : 'Autocomplete off')
     }
@@ -237,7 +237,7 @@ function App() {
                 style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
             />
 
-            <div className="flex flex-1 overflow hidden">
+            <div className="flex flex-1 overflow-hidden">
                 <Sidebar
                     notes={notes}
                     currentNoteId={currentNote?.id}

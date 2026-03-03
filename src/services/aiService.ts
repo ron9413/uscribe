@@ -3,7 +3,6 @@ import Anthropic from '@anthropic-ai/sdk'
 import { AIProvider, RevisionAction } from '../types'
 import { getTemplateForModel } from './autocompleteTemplates'
 import { getRevisionTemplateForModel } from './revisionTemplates'
-import { text } from 'stream/consumers'
 
 interface CompletionOptions {
   maxTokens?: number
@@ -29,21 +28,21 @@ class AIService {
     private clients: Map<string, any> = new Map()
     private abortControllers: Map<string, AbortController> = new Map()
 
-    async initializeProvider(provider: AIProvider, apikey: string) {
+    async initializeProvider(provider: AIProvider, apiKey: string) {
         this.providers.set(provider.name, provider)
 
         try {
             switch (provider.type) {
                 case 'openai':
                     this.clients.set(provider.name, new OpenAI({
-                        apiKey: apikey,
+                        apiKey,
                         dangerouslyAllowBrowser: true // Only for Electron app
                     }))
                     break
 
                 case 'azure':
                     this.clients.set(provider.name, new OpenAI({
-                        apiKey: apikey,
+                        apiKey,
                         baseURL: provider.baseUrl,
                         dangerouslyAllowBrowser: true
                     }))
@@ -51,15 +50,15 @@ class AIService {
 
                 case 'claude':
                     this.clients.set(provider.name, new Anthropic({
-                        apiKey: apikey,
+                        apiKey,
                     }))
                     break
 
                 case 'ollama': {
                     // Use 127.0.0.1 instead of localhost so Node (e.g. main process) connects via IPv4.
-                    // Otherwise localhost can resolve to ::1 and Ollama may only listen on 127.0.0.1
+                    // Otherwise localhost can resolve to ::1 and Ollama may only listen on 127.0.0.1.
                     const ollamaBase = provider.baseUrl || 'http://127.0.0.1:11434/v1'
-                    const baseURL = ollamaBase.replace(/localhost/i, "127.0.0.1")
+                    const baseURL = ollamaBase.replace(/localhost/i, '127.0.0.1')
                     this.clients.set(provider.name, new OpenAI({
                         apiKey: 'ollama', // Ollama doesn't need a real key
                         baseURL,
@@ -70,7 +69,7 @@ class AIService {
 
                 case 'litellm':
                     this.clients.set(provider.name, new OpenAI({
-                        apiKey: apikey,
+                        apiKey,
                         baseURL: provider.baseUrl || 'http://localhost:4000',
                         dangerouslyAllowBrowser: true
                     }))
@@ -103,12 +102,12 @@ class AIService {
         const abortController = new AbortController()
         this.abortControllers.set(requestId, abortController)
     
-        const prompt = `You are an AI writing assistant. Continue the text below naturally and seamlessly, Write ONLY the continuation text, no explanations or additional commentary. The continuation should flow directly from where the text ends.
+        const prompt = `You are an AI writing assistant. Continue the text below naturally and seamlessly. Write ONLY the continuation text, no explanations or additional commentary. The continuation should flow directly from where the text ends.
 
 ${context}`
 
         try {
-            if (provider.type === "claude") {
+            if (provider.type === 'claude') {
                 // Claude API uses messages format
                 const stream = await client.messages.create({
                     model: provider.model,
@@ -118,7 +117,7 @@ ${context}`
                         role: 'user',
                         content: prompt
                     }],
-                    stream: true
+                    stream: true,
                 })
 
                 for await (const event of stream) {
@@ -142,7 +141,7 @@ ${context}`
                     }],
                     max_tokens: options.maxTokens || 150,
                     temperature: options.temperature || 0.7,
-                    stream: true
+                    stream: true,
                 }
 
                 // Control thinking/reasoning mode (especially for Qwen models where default is true)
@@ -225,7 +224,7 @@ ${context}`
         console.log('Autocomplete prompt preview:', prompt)
 
         // Merge options with template-specific options        
-        const maxTokens = options.maxTokens || templateOptions.maxTokens || 150
+        const maxTokens = options.maxTokens || templateOptions.maxTokens || 100
         const temperature = options.temperature !== undefined ? options.temperature : (templateOptions.temperature || 0.3)
         const stopSequences = templateOptions.stop || []
 
@@ -241,7 +240,7 @@ ${context}`
                         role: 'user',
                         content: prompt
                     }],
-                    stream: true
+                    stream: true,
                 })
 
                 for await (const event of stream) {
@@ -262,7 +261,7 @@ ${context}`
                     }],
                     max_tokens: maxTokens,
                     temperature: temperature,
-                    stream: true
+                    stream: true,
                 }
 
                 // Add stop sequences if provided
@@ -318,7 +317,7 @@ ${context}`
             action,
             customPrompt,
             options.prefix || '',
-            options.suffix || ''
+            options.suffix || '',
         )
 
         console.log('Revision user prompt preview:', prompt.userPrompt.substring(0, 200) + '...')
@@ -335,7 +334,7 @@ ${context}`
                     messages: [{
                         role: 'user',
                         content: prompt.userPrompt
-                    }],
+                    }]
                 })
             
                 const revisedText = response.content
@@ -363,7 +362,7 @@ ${context}`
                 requestBody.enable_thinking = false
 
                 const response = await client.chat.completions.create(requestBody)
-                const revisedText = response.choices[0]?.message?.content || text
+                const revisedText = response.choices[0].message.content || text
 
                 console.log('Revision completed:', revisedText.substring(0, 100) + '...')
                 return revisedText

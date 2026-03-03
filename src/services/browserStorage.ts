@@ -3,7 +3,7 @@ import { Note, NoteMetadata, AIConfig, ElectronAPI } from '../types'
 // Browser-based storage implementation using localStorage
 // This is a fallback for when the app runs in a browser (not Electron)
 class BrowserStorage implements ElectronAPI {
-    private readonly NOTES_KEY = "uscribe-storage"
+    private readonly NOTES_KEY = 'uscribe-storage'
     private readonly CONFIG_KEY = 'uscribe-config'
     private readonly API_KEYS_KEY = 'uscribe-api-keys'
 
@@ -33,7 +33,7 @@ class BrowserStorage implements ElectronAPI {
             updatedAt: note.updatedAt,
             folder: note.folder,
             tags: note.tags,
-        })).sort ((a, b) =>
+        })).sort((a, b) =>
             new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         )
     }
@@ -58,13 +58,13 @@ class BrowserStorage implements ElectronAPI {
                 ...defaultConfig,
                 ...parsed,
                 customRevisionShortcuts: Array.isArray(parsed.customRevisionShortcuts)
-                    ? parsed.customRevisionShortcuts.map((shortcut) => ({
+                    ? parsed.customRevisionShortcuts.map(shortcut => ({
                         ...shortcut,
                         scope: shortcut.scope === 'global' ? 'global' : 'local',
                     }))
                     : [],
             }
-        } catch (error) {
+        } catch {
             return defaultConfig
         }
     }
@@ -91,7 +91,7 @@ class BrowserStorage implements ElectronAPI {
         }
         try {
             return JSON.parse(notesStr)
-        } catch (error) {
+        } catch {
             return {}
         }
     }
@@ -103,7 +103,7 @@ class BrowserStorage implements ElectronAPI {
         }
         try {
             return JSON.parse(keysStr)
-        } catch (error) {
+        } catch {
             return {}
         }
     }
@@ -115,11 +115,11 @@ export const browserStorage = new BrowserStorage()
 // Helper to get the appropriate storage implementation
 export function getStorage(): ElectronAPI {
     // Check if we're running in Electron
-    if (typeof window != 'undefined' && window.electronAPI) {
-        return window. electronAPI
+    if (typeof window !== 'undefined' && window.electronAPI) {
+        return window.electronAPI
     }
-    //Fallback to browser storage
-    if (typeof window != 'undefined' && !window.electronAPI) {
+    // Fallback to browser storage
+    if (typeof window !== 'undefined' && !window.electronAPI) {
         // Only log once
         if (!sessionStorage.getItem('browser-storage-warning')) {
             console.warn('⚠️ Running in browser mode. Using localStorage instead of secure Electron storage.')

@@ -23,8 +23,8 @@ function AutoCompleteShortcutPlugin({ onToggleAutoComplete }: AutoCompleteShortc
             }
         }
 
-        editorElement.addEventListener("keydown", handleKeyDown, true)
-        return () => editorElement.removeEventListener("keydown", handleKeyDown, true)
+        editorElement.addEventListener('keydown', handleKeyDown, true)
+        return () => editorElement.removeEventListener('keydown', handleKeyDown, true)
     }, [editor, onToggleAutoComplete])
 
     return null

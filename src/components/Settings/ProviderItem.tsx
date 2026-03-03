@@ -19,16 +19,16 @@ function ProviderItem({
 }: ProviderItemProps) {
     const getProviderIcon = (type: string) => {
         switch (type) {
-            case "openai":
-                return "🤖";
-            case "azure":
-                return "☁️";
-            case "claude":
-                return "🧠";
-            case "ollama":
-                return "🦙";
+            case 'openai':
+                return '🤖'
+            case 'azure':
+                return '☁️'
+            case 'claude':
+                return '🧠'
+            case 'ollama':
+                return '🦙'
             default:
-                return "⚙️";
+                return '⚙️'
         }
     }
 
@@ -54,7 +54,7 @@ function ProviderItem({
                         <span className="text-2xl">{getProviderIcon(provider.type)}</span>
                         <div>
                             <h4 className="font-semibold">{provider.name}</h4>
-                            <p className="text-gray-600">
+                            <p className="text-sm text-gray-600">
                                 {provider.type.toUpperCase()} • {provider.model}
                             </p>
                         </div>

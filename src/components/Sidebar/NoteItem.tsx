@@ -17,16 +17,16 @@ function NoteItem({ note, isSelected, onSelect, onDelete }: NoteItemProps) {
         if (days === 0) {
             return date.toLocaleTimeString('en-US', {
                 hour: 'numeric',
-                minute: '2-digit'
+                minute: '2-digit',
             })
         } else if (days === 1) {
-            return "Yesterday"
+            return 'Yesterday'
         } else if (days < 7) {
             return date.toLocaleDateString('en-US', { weekday: 'short' })
         } else {
             return date.toLocaleDateString('en-US', {
                 month: 'short',
-                day: 'numeric'
+                day: 'numeric',
             })
         }
     }
@@ -50,7 +50,7 @@ function NoteItem({ note, isSelected, onSelect, onDelete }: NoteItemProps) {
         >
             <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                    <h3 className=" font-medium text-notes-text truncate">
+                    <h3 className="font-medium text-notes-text truncate">
                         {note.title}
                     </h3>
                     <p className="text-xs text-gray-500 mt-1">
@@ -59,7 +59,7 @@ function NoteItem({ note, isSelected, onSelect, onDelete }: NoteItemProps) {
                 </div>
                 <button
                     onClick={handleDelete}
-                    onMouseDown={(e) => e.stopPropagation() }
+                    onMouseDown={(e) => e.stopPropagation()}
                     className="ml-2 p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                     title="Delete note"
                     type="button"

@@ -20,9 +20,9 @@ export default defineConfig({
                         rollupOptions: {
                             external: ['electron', 'robotjs'],
                             output: {
-                                entryFileNames: "main.bundle.js",
-                                chunkFileNames: "[name].js",
-                                manualChunks: () => 'main.bundle',
+                                entryFileNames: 'main.bundle.js',
+                                chunkFileNames: '[name].js',
+                                manualChunks: () => 'main.bundle'
                             }
                         }
                     }
@@ -40,7 +40,7 @@ export default defineConfig({
                             external: ['electron'],
                             output: {
                                 format: 'cjs',
-                                entryFileNames: "preload.js",
+                                entryFileNames: 'preload.js',
                             }
                         }
                     }

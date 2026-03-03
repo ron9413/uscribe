@@ -27,10 +27,10 @@ interface AutoCompleteContext {
 interface InsertionPoint {
     key: string
     offset: number
-    type: "text" | "element"
+    type: 'text' | 'element'
 }
 
-const PENDING_AUTOCOMPLETE_STYLE = 'color: #9ca3af; opacity: 0.6; --autocomplete-pending: 1'
+const PENDING_AUTOCOMPLETE_STYLE = 'color: #9ca3af; opacity: 0.6; --autocomplete-pending: 1;'
 const PENDING_AUTOCOMPLETE_MARKER = '--autocomplete-pending: 1'
 
 function isPendingAutocompleteNodeStyle(style: string): boolean {
@@ -40,7 +40,7 @@ function isPendingAutocompleteNodeStyle(style: string): boolean {
 function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginProps) {
     const [editor] = useLexicalComposerContext()
     const [contextData, setContextData] = useState<AutoCompleteContext>({
-        fullText: "",
+        fullText: '',
         cursorPosition: 0
     })
     const pendingNodeKeysRef = useRef<string[]>([])
@@ -133,7 +133,7 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
                     }
 
                     if (node.is(anchorNode)) {
-                        if (isPending) {
+                        if (!isPending) {
                             cursorPosition += Math.min(anchorOffset, textContent.length)
                         }
                         foundCursor = true
@@ -153,17 +153,17 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
                     }
                     return {
                         fullText: allText,
-                        cursorPosition
+                        cursorPosition,
                     }
                 })
 
-                console.log("Autocomplete context - Full text length:", allText.length)
-                console.log("Cursor position:", cursorPosition)
+                console.log('Autocomplete context - Full text length:', allText.length)
+                console.log('Cursor position:', cursorPosition)
             }
         })
     }, [editor])
 
-    // Extract context from editor and calculte cursor position
+    // Extract context from editor and calculate cursor position
     useEffect(() => {
         const unregisterUpdate = editor.registerUpdateListener(() => {
             syncContextFromEditor()
@@ -290,7 +290,7 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
                 className="fixed bottom-4 right-4 bg-gray-800 text-white text-xs px-3 py-1 rounded shadow-lg pointer-events-none"
                 style={{ zIndex: 1000 }}
             >
-                Tab to accept · Esc to dismiss
+                Tab to accept • Esc to dismiss
             </div>
         )
     }

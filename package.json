@@ -9,7 +9,7 @@
         "build": "vite build && electron-builder",
         "build:dir": "vite build && electron-builder --dir",
         "preview": "vite preview",
-        "typecheck": "tsc —noEmit",
+        "typecheck": "tsc --noEmit",
         "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
         "electron:dev": "vite",
         "electron:build": "vite build && electron-builder"

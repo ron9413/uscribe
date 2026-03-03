@@ -13,7 +13,7 @@ import TitleBar from './TitleBar'
 
 // Strip pending revision/autocomplete highlights from saved content so that reopening
 // the app never shows orphaned temporary UI state.
-// Red-highlighted nodes (original, text) have their style cleared.
+// Red-highlighted nodes (original text) have their style cleared.
 // Green-highlighted nodes (suggested text) and their preceding linebreak are removed.
 // Gray autocomplete pending nodes are removed.
 function sanitizeRevisionHighlights(contentJson: string): string {
@@ -25,7 +25,7 @@ function sanitizeRevisionHighlights(contentJson: string): string {
 
             if (node.type === 'text') {
                 if (node.style?.includes('#dcfce7')) return []
-                if (node.style?.includes('#fee2e2')) return { ...node, style: '' }
+                if (node.style?.includes('#fee2e2')) return [{ ...node, style: '' }]
                 if (node.style?.includes('--autocomplete-pending: 1')) return []
                 return [node]
             }
@@ -65,17 +65,17 @@ interface EditorProps {
 
 function Editor({ note, config, onUpdate, onToggleAutoComplete }: EditorProps) {
     const initialConfig = {
-        namespace: "AINotesEditor",
+        namespace: 'AINotesEditor',
         theme: {
-            paragraph: "editor-paragraph",
+            paragraph: 'editor-paragraph',
             text: {
-                bold: "editor-text-bold",
-                italic: "editor-text-italic",
-                underline: "editor-text-underline",
+                bold: 'editor-text-bold',
+                italic: 'editor-text-italic',
+                underline: 'editor-text-underline',
             },
         },
         onError: (error: Error) => {
-            console.error("Lexical error:", error)
+            console.error('Lexical error:', error)
         },
         editorState: note.content || undefined,
     }

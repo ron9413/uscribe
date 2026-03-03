@@ -1,4 +1,4 @@
-import {Note, NoteMetadata, AIConfig} from '../types'
+import { Note, NoteMetadata, AIConfig } from '../types'
 
 class StorageService {
     async listNotes(): Promise<NoteMetadata[]> {
@@ -29,7 +29,7 @@ class StorageService {
         return window.electronAPI.storeApiKey(provider, key)
     }
 
-    async getApikey(provider: string): Promise<string | null> {
+    async getApiKey(provider: string): Promise<string | null> {
         return window.electronAPI.getApiKey(provider)
     }
 }

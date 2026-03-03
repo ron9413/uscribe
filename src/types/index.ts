@@ -1,4 +1,4 @@
-//Note types
+// Note types
 export interface Note {
     id: string;
     title: string;
@@ -22,7 +22,7 @@ export interface NoteMetadata {
 export interface AIProvider {
     name: string;
     type: 'openai' | 'azure' | 'claude' | 'ollama' | 'litellm';
-    apikey?: string;
+    apiKey?: string;
     baseUrl?: string;
     model: string;
 }

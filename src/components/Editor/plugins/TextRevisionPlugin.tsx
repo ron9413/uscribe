@@ -148,7 +148,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
                 const isBackward = selection.isBackward()
                 const startPoint = isBackward ? selection.focus : selection.anchor
                 const endPoint = isBackward ? selection.anchor : selection.focus
-                const selectionRange = {
+                selectionRange = {
                     startOffset: startPoint.offset,
                     endOffset: endPoint.offset,
                     startKey: startPoint.key,
@@ -349,7 +349,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
     const clearPreviousRevisionDiff = useCallback(() => {
         const suggestedKeys = suggestedNodeKeysRef.current
         const highlightedKeys = highlightedNodeKeysRef.current
-        if (highlightedKeys.length === 0 && suggestedKeys.length === 0) return
+        if (suggestedKeys.length === 0 && highlightedKeys.length === 0) return
 
         editor.update(() => {
             suggestedKeys.forEach(key => {
@@ -402,7 +402,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
 
         // Before clearing highlights, capture the range from the currently-highlighted nodes.
         // applyMenuSelectionHighlight() splits text nodes at selection boundaries, so the
-        // original snapshot key/offsets may now point to a shorter prefix node with stale
+        // original snapshot keys/offsets may now point to a shorter prefix node with stale
         // offsets. The highlighted node keys always refer to the exact nodes that need to be
         // replaced, so we prefer those when available.
         let highlightBasedRange: StoredSelectionRange | null = null
@@ -490,7 +490,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
             }
 
         try {
-            await reviseText (textToRevise, action, customPrompt, hookSelectionRange, selectionContext)
+            await reviseText(textToRevise, action, customPrompt, hookSelectionRange, selectionContext)
         } finally {
             revisionInFlightRef.current = false
         }
@@ -502,7 +502,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
 
         editor.setEditable(false)
 
-        let newSuggestedKey = ""
+        let newSuggestedKey = ''
         let keysToHighlight: string[] = []
     
         editor.update(() => {
@@ -514,7 +514,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
             if (!startNode || !endNode || !$isTextNode(startNode) || !$isTextNode(endNode)) {
                 const fallbackTextNodes = pendingTargetNodeKeysRef.current
                     .map(key => $getNodeByKey(key))
-                    .filter((node): node is ReturnType<typeof $createTextNode> => Boolean(node) && $isTextNode(node))
+                    .filter((node): node is ReturnType<typeof $createTextNode> => Boolean(node && $isTextNode(node)))
 
                 if (fallbackTextNodes.length > 0) {
                     const firstFallback = fallbackTextNodes[0]
@@ -533,7 +533,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
             }
 
             if (!startNode || !endNode || !$isTextNode(startNode) || !$isTextNode(endNode)) {
-                // Nodes may have been invalidated (e.g. "document edited during long revision")
+                // Nodes may have been invalidated (e.g. document edited during long revision)
                 setHighlightedNodeKeys([])
                 setStoredSelectionRange(null)
                 rejectRevision()
@@ -543,7 +543,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
             if (startKey === endKey) {
                 // Selection within a single text node: split at start and end, highlight only the middle part
                 const size = startNode.getTextContentSize()
-                if (startOffset >= endOffset || startOffset > size) {
+                if (startOffset >= endOffset || startOffset >= size) {
                     setHighlightedNodeKeys([])
                     setStoredSelectionRange(null)
                     rejectRevision()
@@ -551,7 +551,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
                 }
                 const end = Math.min(endOffset, size)
                 const parts = startNode.splitText(startOffset, end)
-                // When startOffset = 0, Lexical skips the boundary split so parts[0] is the selected
+                // When startOffset === 0, Lexical skips the boundary split so parts[0] IS the selected
                 // text. When startOffset > 0, parts[0] is the pre-selection head and parts[1] is selected.
                 const selectedNode = startOffset === 0
                     ? parts[0]
@@ -746,7 +746,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
                     }
                 } else {
                     if (!showMenu) {
-                        setSelectedText("")
+                        setSelectedText('')
                     }
                 }
             })
@@ -762,7 +762,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
             const { type, payload, mode } = customEvent.detail as {
                 type: string
                 payload?: RevisionAction | { action?: RevisionAction; customPrompt?: string }
-                mode?: "menu" | "custom"
+                mode?: 'menu' | 'custom'
             }
 
             const payloadAction =
@@ -835,7 +835,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
 
                 if (!selectedText) return
 
-                if (providerName?.trim()) {
+                if (!providerName?.trim()) {
                     showWarning()
                     return
                 }
@@ -907,7 +907,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
 
     const handleAccept = () => {
         editor.update(() => {
-            // Get current text from the suggested node (it might have been edited)
+            // Get the current text from the suggested node (it might have been edited)
             let acceptedText = revisionResult?.revised || ''
             if (suggestedNodeKeys.length > 0) {
                 try {
@@ -956,7 +956,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
                     const node = $getNodeByKey(key)
                     if (node && $isTextNode(node)) {
                         node.setStyle('')
-                        node.setMode("normal") // Restore editability
+                        node.setMode('normal') // Restore editability
                     }
                 } catch (e) {
                     // Node might have been removed
@@ -966,8 +966,8 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
             // Replace the selected text with accepted text (works even if editor lost focus).
             if (replacementRange) {
                 const selection = $createRangeSelection()
-                selection.anchor.set(replacementRange.startKey, replacementRange.startOffset, "text")
-                selection.focus.set(replacementRange.endKey, replacementRange.endOffset, "text")
+                selection.anchor.set(replacementRange.startKey, replacementRange.startOffset, 'text')
+                selection.focus.set(replacementRange.endKey, replacementRange.endOffset, 'text')
                 $setSelection(selection)
                 selection.insertText(acceptedText)
             }

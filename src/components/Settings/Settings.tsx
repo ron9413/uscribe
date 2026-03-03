@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { AIConfig, AIProvider, CustomRevisionShortcut } from '../../types'
 import { aiService } from '../../services/aiService'
 import { getStorage } from '../../services/browserStorage'
-import ProviderItem from  './ProviderItem'
+import ProviderItem from './ProviderItem'
 import AddProviderForm from './AddProviderForm'
 import { parseShortcutInput, acceleratorToDisplay } from '../../utils/shortcutUtils'
 
@@ -124,7 +124,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                 await storage.storeApiKey(provider.name, apiKey)
             }
 
-            //Initialize the provider
+            // Initialize the provider
             await aiService.initializeProvider(provider, apiKey)
 
             let newProviders: AIProvider[]
@@ -238,7 +238,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
             ...localConfig,
             customRevisionShortcuts: editingShortcutId
                 ? localConfig.customRevisionShortcuts.map(item =>
-                      item.id === editingShortcutId ? shortcut : item
+                      item.id === editingShortcutId ? shortcut : item,
                   )
                 : [...localConfig.customRevisionShortcuts, shortcut],
         })
@@ -251,7 +251,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
         persistConfig({
             ...localConfig,
             customRevisionShortcuts: localConfig.customRevisionShortcuts.filter(
-                shortcut => shortcut.id !== id
+                shortcut => shortcut.id !== id,
             ),
         })
 
@@ -350,7 +350,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                                         </div>
                                     ))}
                                 </div>
-                                {!editingProvider && (
+                                {!editingProvider && !showAddForm && (
                                     <button
                                         onClick={() => setShowAddForm(true)}
                                         className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
@@ -477,7 +477,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                         </div>
                         <div className="space-y-2 text-sm">
                             {localConfig.customRevisionShortcuts.length === 0 && (
-                                <p className="text-sm text-gray-500">No custom shortcuts yet.</p>
+                                <p className="text-xs text-gray-500">No custom shortcuts yet.</p>
                             )}
                             {localConfig.customRevisionShortcuts.map(shortcut => (
                                 <div
@@ -599,7 +599,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                                         className="px-3 py-2 bg-gray-900 text-white rounded text-sm hover:bg-black"
                                         onClick={handleAddCustomShortcut}
                                     >
-                                        {editingShortcutId ? 'Save Changes' : 'Add Shortcut'}
+                                        {editingShortcutId ? 'Save Shortcut' : 'Add Shortcut'}
                                     </button>
                                     <button
                                         type="button"

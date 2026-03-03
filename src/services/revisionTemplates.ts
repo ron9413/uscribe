@@ -7,7 +7,7 @@ export interface RevisionTemplate {
         action: RevisionAction,
         customPrompt: string | undefined,
         prefix: string,
-        suffix: string
+        suffix: string,
     ) => {
         systemPrompt: string
         userPrompt: string
@@ -41,7 +41,7 @@ export function getRevisionTemplateForModel(_model: string): RevisionTemplate {
     return sharedRevisionTemplate
 }
 
-export function getRevisionPrompt (
+export function getRevisionPrompt(
     model: string,
     text: string,
     action: RevisionAction,

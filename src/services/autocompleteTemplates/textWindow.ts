@@ -4,7 +4,7 @@ export function extractPrefixSuffix(
     maxPrefixLength: number = 1000,
     maxSuffixLength: number = 500
 ): { prefix: string; suffix: string } {
-    let prefix = fullText.substring(0, cursorPosition);
+    let prefix = fullText.substring(0, cursorPosition)
     if (prefix.length > maxPrefixLength) {
         // Keep the newest prefix context closest to the cursor.
         // Trim from the beginning and preserve the end.
@@ -14,11 +14,11 @@ export function extractPrefixSuffix(
     // Keep suffix within the current paragraph only; avoid pulling text
     // from following paragraphs into the autocomplete context.
     const suffixFromCursor = fullText.substring(cursorPosition)
-    const newLineIndex = suffixFromCursor.indexOf('\n')
+    const newlineIndex = suffixFromCursor.indexOf('\n')
     let suffix =
-        newLineIndex === -1
+        newlineIndex === -1
             ? suffixFromCursor
-            : suffixFromCursor.substring(0, newLineIndex)
+            : suffixFromCursor.substring(0, newlineIndex)
 
     if (suffix.length > maxSuffixLength) {
         suffix = suffix.substring(0, maxSuffixLength) + '...'
