@@ -1,0 +1,74 @@
+{
+    "name": "uscribe",
+    "version": "1.0.0",
+    "description": "AI-powered notes application with auto-complete and text revision",
+    "main": "dist-electron/main.bundle.js",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build && electron-builder",
+        "build:dir": "vite build && electron-builder --dir",
+        "preview": "vite preview",
+        "typecheck": "tsc —noEmit",
+        "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+        "electron:dev": "vite",
+        "electron:build": "vite build && electron-builder"
+    },
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.17.0",
+        "@lexical/react": "^0.12.5",
+        "@lexical/rich-text": "^0.12.5",
+        "@lexical/utils": "^0.12.5",
+        "chokidar": "^3.6.0",
+        "diff": "^5.2.0",
+        "lexical": "^0.12.5",
+        "openai": "^4.28.0",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "robotjs": "0.6.0",
+        "uuid": "^9.0.1"
+    },
+    "devDependencies": {
+        "@types/diff": "^5.0.9",
+        "@types/node": "^20.11.19",
+        "@types/react": "^18.3.3",
+        "@types/react-dom": "^18.3.0",
+        "@types/uuid": "^9.0.8",
+        "@typescript-eslint/eslint-plugin": "^7.0.1",
+        "@typescript-eslint/parser": "^7.0.1",
+        "@vitejs/plugin-react": "^4.2.1",
+        "autoprefixer": "^10.4.17",
+        "concurrently": "^8.2.2",
+        "electron": "^28.2.3",
+        "electron-builder": "^24.9.1",
+        "eslint": "^8.56.0",
+        "eslint-plugin-react-hooks": "^4.6.0",
+        "eslint-plugin-react-refresh": "^0.4.5",
+        "postcss": "^8.4.35",
+        "tailwindcss": "^3.4.1",
+        "typescript": "^5.3.3",
+        "vite": "^5.1.3",
+        "vite-plugin-electron": "^0.28.3",
+        "vite-plugin-electron-renderer": "^0.14.5",
+        "wait-on": "^7.2.0"
+    },
+    "build": {
+        "appId": "com.ainotes.app",
+        "productName": "AI Notes",
+        "directories": {
+            "output": "release"
+        },
+        "mac": {
+            "category": "public.app-category.productivity",
+            "target": [
+                "dmg",
+                "zip"
+            ],
+            "icon": "build/icon.icns"
+        },
+        "files": [
+            "dist/**/*",
+            "dist-electron/**/*"
+        ]
+    }
+}
