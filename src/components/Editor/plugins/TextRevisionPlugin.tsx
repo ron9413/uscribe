@@ -134,7 +134,6 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
     const {
         reviseText,
         isRevising,
-        streamingPreview,
         revisionResult,
         acceptRevision,
         rejectRevision,
