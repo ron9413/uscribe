@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AIProvider } from '../../types'
 
 interface AddProviderFormProps {
@@ -36,6 +36,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
     const [modelToPull, setModelToPull] = useState('')
     const [pullProgress, setPullProgress] = useState('')
     const [isPulling, setIsPulling] = useState(false)
+    const pullAbortControllerRef = useRef<AbortController | null>(null)
 
     const modelOptions: Record<AIProvider['type'], string[]> = {
         openai: ['gpt-4', 'gpt-4-turbo-preview', 'gpt-3.5-turbo'],
@@ -86,10 +87,14 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
         setPullProgress('Starting download...')
 
         try {
+            const abortController = new AbortController()
+            pullAbortControllerRef.current = abortController
+
             const response = await fetch('http://localhost:11434/api/pull', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: modelToPull, stream: true })
+                body: JSON.stringify({ name: modelToPull, stream: true }),
+                signal: abortController.signal
             })
 
             if (!response.ok) {
@@ -134,12 +139,30 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                 setShowPullDialog(false)
                 setIsPulling(false)
                 setPullProgress('')
+                pullAbortControllerRef.current = null
             }, 1500)
         } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                setPullProgress('Download canceled')
+                setIsPulling(false)
+                pullAbortControllerRef.current = null
+                return
+            }
+
             console.error('Error pulling model:', error)
             setPullProgress(`Error: ${error.message}`)
             setIsPulling(false)
+            pullAbortControllerRef.current = null
         }
+    }
+
+    const handleCancelPull = () => {
+        if (isPulling) {
+            pullAbortControllerRef.current?.abort()
+        }
+        setShowPullDialog(false)
+        setModelToPull('')
+        setPullProgress('')
     }
 
     const validate = () => {
@@ -493,14 +516,12 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                             </button>
                             <button
                                 onClick={() => {
-                                    setShowPullDialog(false)
-                                    setModelToPull('')
-                                    setPullProgress('')
+                                    handleCancelPull()
                                 }}
                                 disabled={isPulling}
-                                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:bg-gray-100"
+                                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
                             >
-                                Cancel
+                                {isPulling ? 'Cancel Download' : 'Cancel'}
                             </button>
                         </div>
                     </div>

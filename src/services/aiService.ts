@@ -1,15 +1,16 @@
 import OpenAI from 'openai'
 import Anthropic from '@anthropic-ai/sdk'
 import { AIProvider, RevisionAction } from '../types'
-import { getTemplateForModel } from './autocompleteTemplates'
-import { getRevisionTemplateForModel } from './revisionTemplates'
-
-interface CompletionOptions {
-  maxTokens?: number
-  temperature?: number
-  stopSequences?: string[]
-  enableThinking?: boolean
-}
+import {
+    DEFAULT_AUTOCOMPLETE_MAX_TOKENS,
+    DEFAULT_AUTOCOMPLETE_TEMPERATURE,
+    getAutocompleteTemplateForModel,
+} from './autocompleteTemplates/template'
+import {
+    DEFAULT_REVISION_MAX_TOKENS,
+    DEFAULT_REVISION_TEMPERATURE,
+    getRevisionTemplateForModel,
+} from './revisionTemplates/template'
 
 interface AutocompleteOptions {
   prefix: string
@@ -23,10 +24,146 @@ interface RevisionOptions {
   suffix?: string
 }
 
+interface StreamTextRequestOptions {
+    requestIdPrefix: string
+    logLabel: string
+    errorLabel: string
+    systemPrompt: string
+    userPrompt: string
+    maxTokens?: number
+    temperature?: number
+    stopSequences?: string[]
+}
+
+
 class AIService {
     private providers: Map<string, AIProvider> = new Map()
     private clients: Map<string, any> = new Map()
     private abortControllers: Map<string, AbortController> = new Map()
+
+    private getProviderAndClient(providerName: string) {
+        const provider = this.providers.get(providerName)
+        const client = this.clients.get(providerName)
+
+        if (!provider || !client) {
+            throw new Error(`Provider ${providerName} not initialized`)
+        }
+
+        return { provider, client }
+    }
+
+    private createRequestController(requestId: string) {
+        const abortController = new AbortController()
+        this.abortControllers.set(requestId, abortController)
+        return abortController
+    }
+
+    private cleanupRequestController(requestId: string) {
+        this.abortControllers.delete(requestId)
+    }
+
+    private async *streamClaudeText(
+        client: any,
+        request: any,
+        abortController: AbortController
+    ): AsyncGenerator<string> {
+        const stream = await client.messages.create({
+            ...request,
+            stream: true,
+        })
+
+        for await (const event of stream) {
+            if (abortController.signal.aborted) break
+
+            if (event.type === 'content_block_delta' &&
+                event.delta.type === 'text_delta') {
+                yield event.delta.text
+            }
+        }
+    }
+
+    private async *streamOpenAICompatibleText(
+        client: any,
+        requestBody: any,
+        abortController: AbortController
+    ): AsyncGenerator<string> {
+        const stream = await client.chat.completions.create(
+            { ...requestBody, stream: true },
+            { signal: abortController.signal }
+        )
+
+        for await (const chunk of stream) {
+            if (abortController.signal.aborted) break
+
+            const content = chunk.choices[0]?.delta?.content
+            if (content) {
+                yield content
+            }
+        }
+    }
+
+    private applyProviderSpecificRequestOptions(
+        provider: AIProvider,
+        requestBody: any,
+    ) {
+        if (provider.type === 'litellm') {
+            requestBody.drop_params = true
+        }
+    }
+
+    private async *streamTextRequest(
+        providerName: string,
+        options: StreamTextRequestOptions
+    ): AsyncGenerator<string> {
+        const { provider, client } = this.getProviderAndClient(providerName)
+
+        console.log(`Streaming ${options.logLabel} with provider: ${providerName} (${provider.type})`)
+        console.log(`Model: ${provider.model}`)
+
+        const requestId = `${providerName}-${options.requestIdPrefix}-${Date.now()}`
+        const abortController = this.createRequestController(requestId)
+    
+        try {
+            if (provider.type === 'claude') {
+                yield* this.streamClaudeText(client, {
+                    model: provider.model,
+                    max_tokens: options.maxTokens,
+                    temperature: options.temperature,
+                    stop_sequences: options.stopSequences,
+                    system: options.systemPrompt,
+                    messages: [{
+                        role: 'user',
+                        content: options.userPrompt
+                    }],
+                }, abortController)
+            } else {
+                const requestBody: any = {
+                    model: provider.model,
+                    messages: [{
+                        role: 'system',
+                        content: options.systemPrompt,
+                    }, {
+                        role: 'user',
+                        content: options.userPrompt,
+                    }],
+                    max_tokens: options.maxTokens,
+                    temperature: options.temperature,
+                }
+
+                if (options.stopSequences && options.stopSequences.length > 0) {
+                    requestBody.stop = options.stopSequences
+                }
+
+                this.applyProviderSpecificRequestOptions(provider, requestBody)
+                yield* this.streamOpenAICompatibleText(client, requestBody, abortController)
+            }
+        } catch (error) {
+            console.error(`Error in ${options.errorLabel}:`, error)
+            throw error
+        } finally {
+            this.cleanupRequestController(requestId)
+        }
+    }
 
     async initializeProvider(provider: AIProvider, apiKey: string) {
         this.providers.set(provider.name, provider)
@@ -84,92 +221,6 @@ class AIService {
         }
     }
 
-    async *streamCompletion(
-        providerName: string,
-        context: string,
-        options: CompletionOptions = {}
-    ): AsyncGenerator<string> {
-        const provider = this.providers.get(providerName)
-        const client = this.clients.get(providerName)
-
-        if (!provider || !client) {
-            throw new Error(`Provider ${providerName} not initialized`)
-        }
-
-        console.log(`Streaming completion with provider: ${providerName} (${provider.type})`)
-
-        const requestId = `${providerName}-${Date.now()}`
-        const abortController = new AbortController()
-        this.abortControllers.set(requestId, abortController)
-    
-        const prompt = `You are an AI writing assistant. Continue the text below naturally and seamlessly. Write ONLY the continuation text, no explanations or additional commentary. The continuation should flow directly from where the text ends.
-
-${context}`
-
-        try {
-            if (provider.type === 'claude') {
-                // Claude API uses messages format
-                const stream = await client.messages.create({
-                    model: provider.model,
-                    max_tokens: options.maxTokens || 150,
-                    temperature: options.temperature || 0.7,
-                    messages: [{
-                        role: 'user',
-                        content: prompt
-                    }],
-                    stream: true,
-                })
-
-                for await (const event of stream) {
-                    if (abortController.signal.aborted) break
-
-                    if (event.type === 'content_block_delta' &&
-                        event.delta.type === 'text_delta') {
-                        yield event.delta.text
-                    }
-                }
-            } else {
-                // OpenAI-compatible API (OpenAI, Azure, Ollama, LiteLLM)
-                const requestBody: any = {
-                    model: provider.model,
-                    messages: [{
-                        role: 'system',
-                        content: prompt
-                    }, {
-                        role: 'user',
-                        content: context
-                    }],
-                    max_tokens: options.maxTokens || 150,
-                    temperature: options.temperature || 0.7,
-                    stream: true,
-                }
-
-                // Control thinking/reasoning mode (especially for Qwen models where default is true)
-                if (options.enableThinking !== undefined) {
-                    requestBody.enable_thinking = options.enableThinking
-                }
-
-                const stream = await client.chat.completions.create(requestBody, {
-                    signal: abortController.signal
-                })
-
-                for await (const chunk of stream) {
-                    if (abortController.signal.aborted) break
-
-                    const content = chunk.choices[0]?.delta?.content
-                    if (content) {
-                        yield content
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error in streamCompletion:', error)
-            throw error
-        } finally {
-            this.abortControllers.delete(requestId)
-        }
-    }
-
     cancelCompletion(requestId: string) {
         const controller = this.abortControllers.get(requestId)
         if (controller) {
@@ -183,135 +234,57 @@ ${context}`
         this.abortControllers.clear()
     }
 
-    /**
-     * Optimized autocomplete using standardized sentence-completion templates.
-     */
     async *streamAutocomplete(
         providerName: string,
         options: AutocompleteOptions
     ): AsyncGenerator<string> {
-        const provider = this.providers.get(providerName)
-        const client = this.clients.get(providerName)
-
-        if (!provider || !client) {
-            throw new Error(`Provider ${providerName} not initialized`)
-        }
-
-        console.log(`Streaming autocomplete with provider: ${providerName} (${provider.type})`)
-        console.log(`Model: ${provider.model}`)
-
-        const requestId = `${providerName}-autocomplete-${Date.now()}`
-        const abortController = new AbortController()
-        this.abortControllers.set(requestId, abortController)
+        const { provider } = this.getProviderAndClient(providerName)
 
         // Get the appropriate template for this model
-        const template = getTemplateForModel(provider.model)
+        const template = getAutocompleteTemplateForModel(provider.model)
         const templateOptions = template.completionOptions || {}
 
-        // Build the prompt using the template
-        let prompt: string
-        if (typeof template.template === 'function') {
-            prompt = template.template(
-                options.prefix,
-                options.suffix || ''
-            )
-        } else {
-            prompt = template.template
-                .replace('{{{prefix}}}', options.prefix)
-                .replace('{{{suffix}}}', options.suffix || '')
-        }
+        const prompt = template.buildPrompts(options.prefix, options.suffix || '')
 
-        console.log('Autocomplete prompt preview:', prompt)
+        console.log('Autocomplete user prompt preview:', prompt.userPrompt)
 
         // Merge options with template-specific options        
-        const maxTokens = options.maxTokens || templateOptions.maxTokens || 100
-        const temperature = options.temperature !== undefined ? options.temperature : (templateOptions.temperature || 0.3)
+        const maxTokens = options.maxTokens ?? templateOptions.maxTokens ?? DEFAULT_AUTOCOMPLETE_MAX_TOKENS
+        const temperature = options.temperature !== undefined
+            ? options.temperature
+            : (templateOptions.temperature ?? DEFAULT_AUTOCOMPLETE_TEMPERATURE)
         const stopSequences = templateOptions.stop || []
 
-        try {
-            if (provider.type === 'claude') {
-                // Claude API uses messages format
-                const stream = await client.messages.create({
-                    model: provider.model,
-                    max_tokens: maxTokens,
-                    temperature: temperature,
-                    stop_sequences: stopSequences,
-                    messages: [{
-                        role: 'user',
-                        content: prompt
-                    }],
-                    stream: true,
-                })
-
-                for await (const event of stream) {
-                    if (abortController.signal.aborted) break
-
-                    if (event.type === 'content_block_delta' &&
-                        event.delta.type === 'text_delta') {
-                        yield event.delta.text
-                    }
-                }
-            } else {
-                // OpenAI-compatible API (OpenAI, Azure, Ollama, LiteLLM)
-                const requestBody: any = {
-                    model: provider.model,
-                    messages: [{
-                        role: 'user',
-                        content: prompt
-                    }],
-                    max_tokens: maxTokens,
-                    temperature: temperature,
-                    stream: true,
-                }
-
-                // Add stop sequences if provided
-                if (stopSequences.length > 0) {
-                    requestBody.stop = stopSequences
-                }
-
-                // Disable thinking mode for autocomplete
-                requestBody.enable_thinking = false
-
-                const stream = await client.chat.completions.create(requestBody, {
-                    signal: abortController.signal
-                })
-
-                for await (const chunk of stream) {
-                    if (abortController.signal.aborted) break
-
-                    const content = chunk.choices[0]?.delta?.content
-                    if (content) {
-                        yield content
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error in streamAutocomplete:', error)
-            throw error
-        } finally {
-            this.abortControllers.delete(requestId)
-        }
+        yield* this.streamTextRequest(providerName, {
+            requestIdPrefix: 'autocomplete',
+            logLabel: 'autocomplete',
+            errorLabel: 'streamAutocomplete',
+            systemPrompt: prompt.systemPrompt,
+            userPrompt: prompt.userPrompt,
+            maxTokens: maxTokens,
+            temperature: temperature,
+            stopSequences: stopSequences,
+        })
     }
 
-    async reviseText(
+    /**
+     * Streams revision output chunks; callers can either render progressively
+     * or aggregate chunks for background operations.
+     */
+    async *streamRevision(
         providerName: string,
         text: string,
         action: RevisionAction,
         customPrompt?: string,
         options: RevisionOptions = {}
-    ): Promise<string> {
-        const provider = this.providers.get(providerName)
-        const client = this.clients.get(providerName)
+    ): AsyncGenerator<string> {
+        const { provider } = this.getProviderAndClient(providerName)
 
-        if (!provider || !client) {
-            throw new Error(`Provider ${providerName} not initialized`)
-        }
-
-        console.log(`Revising text with provider: ${providerName} (${provider.type}), action: ${action}`)
+        console.log(`Streaming revision with action: ${action}`)
 
         // Get the appropriate template for this model
         const template = getRevisionTemplateForModel(provider.model)
-        const { completionOptions } = template
+        const { revisionOptions } = template
         const prompt = template.buildPrompts(
             text,
             action,
@@ -322,55 +295,42 @@ ${context}`
 
         console.log('Revision user prompt preview:', prompt.userPrompt.substring(0, 200) + '...')
 
-        const temperature = completionOptions?.temperature || 0.3
-        const maxTokens = completionOptions?.maxTokens || 2000
+        const temperature = revisionOptions?.temperature ?? DEFAULT_REVISION_TEMPERATURE
+        const maxTokens = revisionOptions?.maxTokens ?? DEFAULT_REVISION_MAX_TOKENS
 
-        try {
-            if (provider.type === 'claude') {
-                const response = await client.messages.create({
-                    model: provider.model,
-                    max_tokens: maxTokens,
-                    temperature: temperature,
-                    messages: [{
-                        role: 'user',
-                        content: prompt.userPrompt
-                    }]
-                })
-            
-                const revisedText = response.content
-                    .filter((block: { type: string }) => block.type === 'text')
-                    .map((block: { text: string }) => block.text)
-                    .join('')
-                console.log('Claude revision completed:', revisedText.substring(0, 100) + '...')
-                return revisedText || text
-            } else {
-                // OpenAI-compatible API (OpenAI, Azure, Ollama, LiteLLM)
-                const requestBody: any = {
-                    model: provider.model,
-                    temperature: temperature,
-                    max_tokens: maxTokens,
-                    messages: [{
-                        role: 'system',
-                        content: prompt.systemPrompt
-                    }, {
-                        role: 'user',
-                        content: prompt.userPrompt
-                    }],
-                }
+        yield* this.streamTextRequest(providerName, {
+            requestIdPrefix: 'revision',
+            logLabel: 'revision',
+            errorLabel: 'streamRevision',
+            systemPrompt: prompt.systemPrompt,
+            userPrompt: prompt.userPrompt,
+            maxTokens: maxTokens,
+            temperature: temperature,
+        })
+    }
 
-                // Disable thinking mode for revision
-                requestBody.enable_thinking = false
+    async reviseText(
+        providerName: string,
+        text: string,
+        action: RevisionAction,
+        customPrompt?: string,
+        options: RevisionOptions = {}
+    ): Promise<string> {
+        let revisedText = ''
 
-                const response = await client.chat.completions.create(requestBody)
-                const revisedText = response.choices[0].message.content || text
-
-                console.log('Revision completed:', revisedText.substring(0, 100) + '...')
-                return revisedText
-            }
-        } catch (error) {
-            console.error('Error revising text:', error)
-            throw error
+        for await (const chunk of this.streamRevision(
+            providerName,
+            text,
+            action,
+            customPrompt,
+            options
+        )) {
+            revisedText += chunk
         }
+
+        const finalText = revisedText || text
+        console.log('Revision completed:', finalText.substring(0, 100) + '...')
+        return finalText
     }
 
     getProvider(name: string): AIProvider | undefined {

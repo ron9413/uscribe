@@ -9,6 +9,8 @@
         "build": "vite build && electron-builder",
         "build:dir": "vite build && electron-builder --dir",
         "preview": "vite preview",
+        "postinstall": "electron-builder install-app-deps",
+        "rebuild:native": "electron-builder install-app-deps",
         "typecheck": "tsc --noEmit",
         "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
         "electron:dev": "vite",
@@ -53,8 +55,8 @@
         "wait-on": "^7.2.0"
     },
     "build": {
-        "appId": "com.ainotes.app",
-        "productName": "AI Notes",
+        "appId": "com.uscribe.app",
+        "productName": "uScribe",
         "directories": {
             "output": "release"
         },

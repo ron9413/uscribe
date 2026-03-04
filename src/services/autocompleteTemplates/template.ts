@@ -1,3 +1,17 @@
+import { buildAutocompletePrompt, type AutocompletePrompt } from "./promptBuilder";
+
+export const DEFAULT_AUTOCOMPLETE_MAX_TOKENS = 100
+export const DEFAULT_AUTOCOMPLETE_TEMPERATURE = 0.3
+
+export interface AutocompleteTemplate {
+    buildPrompts: (prefix: string, suffix: string) => AutocompletePrompt
+    completionOptions: {
+        stop?: string[]
+        maxTokens?: number
+        temperature?: number
+    }
+}
+
 export function extractPrefixSuffix(
     fullText: string,
     cursorPosition: number,
@@ -19,10 +33,23 @@ export function extractPrefixSuffix(
         newlineIndex === -1
             ? suffixFromCursor
             : suffixFromCursor.substring(0, newlineIndex)
-
+    
     if (suffix.length > maxSuffixLength) {
         suffix = suffix.substring(0, maxSuffixLength) + '...'
     }
 
     return { prefix, suffix }
+}
+
+export const autocompleteTemplate: AutocompleteTemplate = {
+    buildPrompts: buildAutocompletePrompt,
+    completionOptions: {
+        stop: ['\n', '[COMPLETE_HERE]'],
+        maxTokens: DEFAULT_AUTOCOMPLETE_MAX_TOKENS,
+        temperature: DEFAULT_AUTOCOMPLETE_TEMPERATURE,
+    },
+}
+
+export function getAutocompleteTemplateForModel(_model: string): AutocompleteTemplate {
+    return autocompleteTemplate
 }

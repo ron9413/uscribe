@@ -134,6 +134,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
     const {
         reviseText,
         isRevising,
+        streamingPreview,
         revisionResult,
         acceptRevision,
         rejectRevision,
@@ -496,7 +497,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
         }
     }, [selectedText, providerName, getSelectionRange, reviseText, rejectRevision, showWarning, editor, isRevising, clearPreviousRevisionDiff])
 
-    // Apply red highlighting only to the selected range (split nodes at boundaries) and insert green suggestion
+    // Apply red highlighting to selected range and stream/update green suggestion text.
     useEffect(() => {
         if (!revisionResult || !storedSelectionRange) return
 

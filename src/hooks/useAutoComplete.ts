@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { aiService } from '../services/aiService'
-import { extractPrefixSuffix } from '../services/autocompleteTemplates'
+import { extractPrefixSuffix } from '../services/autocompleteTemplates/template'
 
 interface UseAutoCompleteOptions {
     providerName: string

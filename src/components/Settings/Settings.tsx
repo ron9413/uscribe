@@ -461,7 +461,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                                 <div className="flex items-center gap-2">
                                     <span>Quick Edit</span>
                                     <span className="px-2 py-0.5 text-[11px] rounded-full bg-gray-100 text-gray-700 border border-gray-300">
-                                        Local
+                                        Global
                                     </span>
                                 </div>
                                 <kbd className="px-2 py-1 bg-gray-100 rounded border border-gray-300">
