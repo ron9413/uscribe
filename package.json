@@ -1,6 +1,6 @@
 {
     "name": "uscribe",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "description": "AI-powered notes application with auto-complete and text revision",
     "main": "dist-electron/main.bundle.js",
     "type": "module",
@@ -54,6 +54,9 @@
         "vite-plugin-electron-renderer": "^0.14.5",
         "wait-on": "^7.2.0"
     },
+    "overrides": {
+        "node-abi": "^3.87.0"
+    },
     "build": {
         "appId": "com.uscribe.app",
         "productName": "uScribe",
@@ -65,8 +68,7 @@
             "target": [
                 "dmg",
                 "zip"
-            ],
-            "icon": "build/icon.icns"
+            ]
         },
         "files": [
             "dist/**/*",
