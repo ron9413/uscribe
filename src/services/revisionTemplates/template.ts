@@ -1,4 +1,5 @@
 import { RevisionAction } from '../../types'
+import { truncatePrefixSuffix } from '../textContext'
 import { buildRevisionPrompt, type RevisionPrompt } from './promptBuilder'
 
 export const DEFAULT_REVISION_MAX_TOKENS = 2000
@@ -20,7 +21,15 @@ export interface RevisionTemplate {
 
 export const revisionTemplate: RevisionTemplate = {
     buildPrompts: (text, action, customPrompt, prefix = '', suffix = '') => {
-        return buildRevisionPrompt(action, text, prefix, suffix, customPrompt)
+        const { prefix: truncatedPrefix, suffix: truncatedSuffix } =
+            truncatePrefixSuffix(prefix, suffix)
+        return buildRevisionPrompt(
+            action,
+            text,
+            truncatedPrefix,
+            truncatedSuffix,
+            customPrompt
+        )
     },
     revisionOptions: {
         temperature: DEFAULT_REVISION_TEMPERATURE,

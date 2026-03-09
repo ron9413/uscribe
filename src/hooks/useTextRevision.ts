@@ -58,13 +58,34 @@ export function useTextRevision(options: UseTextRevisionOptions) {
         activeRequestIdRef.current = requestId
 
         try {
-            const revised = await aiService.reviseText(
+            let revised = ''
+            const revisionOptions = context
+                ? { prefix: context.prefix, suffix: context.suffix }
+                : {}
+
+            for await (const chunk of aiService.streamRevision(
                 options.providerName,
                 text,
                 action,
                 customPrompt,
-                context
-            )
+                revisionOptions
+            )) {
+                // Ignore stale results from superseded requests.
+                if (
+                    requestController.signal.aborted ||
+                    activeRequestIdRef.current !== requestId
+                ) {
+                    return null
+                }
+
+                revised += chunk
+                const diff = diffChars(text, revised)
+                setRevisionResult({
+                    original: text,
+                    revised,
+                    diff,
+                })
+            }
 
             // Ignore stale results from superseded requests.
             if (
@@ -74,15 +95,8 @@ export function useTextRevision(options: UseTextRevisionOptions) {
                 return null
             }
 
-            const diff = diffChars(text, revised)
-    
-            setRevisionResult({
-                original: text,
-                revised,
-                diff,
-            })
-
-            return revised
+            const finalRevised = revised || text
+            return finalRevised
         } catch (error) {
             if (
                 (error instanceof Error && error.name === 'AbortError') ||

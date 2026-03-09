@@ -37,15 +37,36 @@ function isPendingAutocompleteNodeStyle(style: string): boolean {
     return style.includes(PENDING_AUTOCOMPLETE_MARKER)
 }
 
+function hasInlineRevisionNode(): boolean {
+    const root = $getRoot()
+    const stack = [...root.getChildren()]
+
+    while (stack.length > 0) {
+        const node = stack.shift()!
+        if (node.getType() === 'inline-revision') {
+            return true
+        }
+        if ('getChildren' in node && typeof node.getChildren === 'function') {
+            stack.push(...node.getChildren())
+        }
+    }
+
+    return false
+}
+
 function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginProps) {
     const [editor] = useLexicalComposerContext()
     const [contextData, setContextData] = useState<AutoCompleteContext>({
         fullText: '',
         cursorPosition: 0
     })
+    const [isInlineRevisionActive, setIsInlineRevisionActive] = useState(false)
+    const [isAutocompleteSupressed, setIsAutocompleteSuppressed] = useState(false)
     const pendingNodeKeysRef = useRef<string[]>([])
     const activeSuggestionRef = useRef('')
     const insertionPointRef = useRef<InsertionPoint | null>(null)
+    const previousInlineRevisionActiveRef = useRef(false)
+    const suppressedContentRef = useRef<string | null>(null)
 
     const clearPendingSuggestionNodes = useCallback(() => {
         const pendingKeys = pendingNodeKeysRef.current
@@ -113,32 +134,58 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
 
      const syncContextFromEditor = useCallback(() => {
         editor.getEditorState().read(() => {
+            const inlineRevisionActive = hasInlineRevisionNode()
+            setIsInlineRevisionActive(inlineRevisionActive)
             const selection = $getSelection()
-            if ($isRangeSelection(selection) && selection.isCollapsed()) {
-                const root = $getRoot()
-                const nodes = root.getAllTextNodes()
+            const root = $getRoot()
+            const nodes = root.getAllTextNodes()
 
+            let allText = ''
+            for (const node of nodes) {
+                if (!isPendingAutocompleteNodeStyle(node.getStyle())) {
+                    allText += node.getTextContent()
+                }
+            }
+
+            const wasInlineRevisionActive = previousInlineRevisionActiveRef.current
+            if (wasInlineRevisionActive && !inlineRevisionActive) {
+                suppressedContentRef.current = allText
+                setIsAutocompleteSuppressed(true)
+            }
+            previousInlineRevisionActiveRef.current = inlineRevisionActive
+
+            let shouldSuppressAutocomplete = isAutocompleteSupressed
+            if (shouldSuppressAutocomplete) {
+                if (suppressedContentRef.current !== null && allText !== suppressedContentRef.current) {
+                    shouldSuppressAutocomplete = false
+                    suppressedContentRef.current = null
+                    setIsAutocompleteSuppressed(false)
+                } else {
+                    return
+                }
+            }
+
+            if (inlineRevisionActive) {
+                return
+            }
+
+            if ($isRangeSelection(selection) && selection.isCollapsed()) {
                 let cursorPosition = 0
-                let allText = ''
                 const anchorNode = selection.anchor.getNode()
                 const anchorOffset = selection.anchor.offset
-    
                 let foundCursor = false
 
                 for (const node of nodes) {
                     const textContent = node.getTextContent()
                     const isPending = isPendingAutocompleteNodeStyle(node.getStyle())
-                    if (!isPending) {
-                        allText += textContent
-                    }
-
                     if (node.is(anchorNode)) {
                         if (!isPending) {
                             cursorPosition += Math.min(anchorOffset, textContent.length)
                         }
                         foundCursor = true
                         break
-                    } else if (!isPending) {
+                    }
+                    if (!isPending) {
                         cursorPosition += textContent.length
                     }
                 }
@@ -151,17 +198,11 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
                     if (prev.fullText === allText && prev.cursorPosition === cursorPosition) {
                         return prev
                     }
-                    return {
-                        fullText: allText,
-                        cursorPosition,
-                    }
+                    return { fullText: allText, cursorPosition }
                 })
-
-                console.log('Autocomplete context - Full text length:', allText.length)
-                console.log('Cursor position:', cursorPosition)
             }
         })
-    }, [editor])
+    }, [editor, isAutocompleteSupressed])
 
     // Extract context from editor and calculate cursor position
     useEffect(() => {
@@ -231,23 +272,43 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
         {
             providerName,
             delay,
-            enabled: true
+            enabled: !isInlineRevisionActive && !isAutocompleteSupressed
         }
     )
 
+    // While inline revision is active, ensure autocomplet is fully cleared/disabled.
+    useEffect(() => {
+        if (!isInlineRevisionActive) return
+        clearPendingSuggestionNodes()
+        activeSuggestionRef.current = ''
+        insertionPointRef.current = null
+        reject()
+    }, [isInlineRevisionActive, clearPendingSuggestionNodes, reject])
+
+    // Immediately after inline revision accept/reject, pause autocomplete until user edits content again.
+    useEffect(() => {
+        if (!isAutocompleteSupressed) return
+        clearPendingSuggestionNodes()
+        activeSuggestionRef.current = ''
+        insertionPointRef.current = null
+        reject()
+    }, [isAutocompleteSupressed, clearPendingSuggestionNodes, reject])
+
     // Keep editor content in sync with streaming suggestion text.
     useEffect(() => {
+        if (isInlineRevisionActive || isAutocompleteSupressed) return
         if (suggestion === activeSuggestionRef.current) return
         clearPendingSuggestionNodes()
         activeSuggestionRef.current = suggestion
         if (suggestion) {
             renderPendingSuggestion(suggestion)
         }
-    }, [suggestion, clearPendingSuggestionNodes, renderPendingSuggestion])
+    }, [suggestion, clearPendingSuggestionNodes, renderPendingSuggestion, isInlineRevisionActive, isAutocompleteSupressed])
 
     // Handle keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
+            if (isInlineRevisionActive || isAutocompleteSupressed) return
             if (suggestion) {
                 if (event.key === 'Tab') {
                     event.preventDefault()
@@ -261,7 +322,7 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
 
         document.addEventListener('keydown', handleKeyDown)
         return () => document.removeEventListener('keydown', handleKeyDown)
-    }, [suggestion, accept, reject])
+    }, [suggestion, accept, reject, isInlineRevisionActive, isAutocompleteSupressed])
 
     useEffect(() => {
         return () => {

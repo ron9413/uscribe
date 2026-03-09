@@ -10,6 +10,7 @@ import AutoCompletePlugin from './plugins/AutoCompletePlugin'
 import AutoCompleteShortcutPlugin from './plugins/AutoCompleteShortcutPlugin'
 import TextRevisionPlugin from './plugins/TextRevisionPlugin'
 import TitleBar from './TitleBar'
+import { InlineRevisionNode } from './nodes/InlineRevisionNode'
 
 // Strip pending revision/autocomplete highlights from saved content so that reopening
 // the app never shows orphaned temporary UI state.
@@ -78,6 +79,7 @@ function Editor({ note, config, onUpdate, onToggleAutoComplete }: EditorProps) {
             console.error('Lexical error:', error)
         },
         editorState: note.content || undefined,
+        nodes: [InlineRevisionNode],
     }
 
     const handleContentChange = (editorState: EditorState) => {

@@ -141,8 +141,7 @@ export function useAutoComplete(
             const { prefix, suffix } = extractPrefixSuffix(
                 fullText,
                 cursorPosition,
-                1000, // Max 1000 chars before cursor
-                500   // Max 500 chars after cursor
+                { maxPrefixLength: 1000, maxSuffixLength: 500 }
             )
 
             let fullSuggestion = ''

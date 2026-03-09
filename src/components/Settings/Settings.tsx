@@ -460,7 +460,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                             <div className="flex justify-between py-2 border-b border-gray-200 gap-4">
                                 <div className="flex items-center gap-2">
                                     <span>Quick Edit</span>
-                                    <span className="px-2 py-0.5 text-[11px] rounded-full bg-gray-100 text-gray-700 border border-gray-300">
+                                    <span className="px-2 py-0.5 text-[11px] rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                                         Global
                                     </span>
                                 </div>
