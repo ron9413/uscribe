@@ -32,6 +32,8 @@ interface TextRevisionPluginProps {
 }
 
 interface StoredSelectionRange {
+    startIndex?: number
+    endIndex?: number
     startOffset: number
     endOffset: number
     startKey: string
@@ -46,6 +48,8 @@ interface SelectionSnapshot {
 }
 
 interface InlineRevisionRange {
+    startIndex?: number
+    endIndex?: number
     startOffset: number
     endOffset: number
     startKey: string
@@ -117,7 +121,22 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
                 const isBackward = selection.isBackward()
                 const startPoint = isBackward ? selection.focus : selection.anchor
                 const endPoint = isBackward ? selection.anchor : selection.focus
+                const textNodes = $getRoot().getAllTextNodes()
+
+                const getAbsoluteIndex = (pointKey: string, pointOffset: number): number => {
+                    let index = 0
+                    for (const node of textNodes) {
+                        if (node.getKey() === pointKey) {
+                            return index + Math.min(pointOffset, node.getTextContentSize())
+                        }
+                        index += node.getTextContentSize()
+                    }
+                    return index
+                }
+
                 selectionRange = {
+                    startIndex: getAbsoluteIndex(startPoint.key, startPoint.offset),
+                    endIndex: getAbsoluteIndex(endPoint.key, endPoint.offset),
                     startOffset: startPoint.offset,
                     endOffset: endPoint.offset,
                     startKey: startPoint.key,
@@ -226,15 +245,82 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
         }, { tag: 'historic' })
     }, [editor])
 
+    const restoreEditorFocus = useCallback(() => {
+        const focusWhenEditable = (attempt = 0) => {
+            const rootElement = editor.getRootElement()
+            if (!rootElement) return
+
+            if (rootElement.contentEditable === 'true') {
+                rootElement.focus()
+                return
+            }
+
+            if (attempt < 5) {
+                requestAnimationFrame(() => focusWhenEditable(attempt + 1))
+            }
+        }
+
+        requestAnimationFrame(() => focusWhenEditable())
+    }, [editor])
+
     const applyAcceptedRevision = useCallback((nodeKey: string, acceptedText: string) => {
         editor.update(() => {
             const node = $getNodeByKey(nodeKey)
             if (!$isInlineRevisionNode(node)) return
 
             const range = node.getRange() as InlineRevisionRange
-            const selection = $createRangeSelection()
-            selection.anchor.set(range.startKey, range.startOffset, 'text')
-            selection.focus.set(range.endKey, range.endOffset, 'text')
+
+            const resolveSelectionByAbsoluteRange = (): ReturnType<typeof $createRangeSelection> | null => {
+                if (typeof range.startIndex !== 'number' || typeof range.endIndex !== 'number') {
+                    return null
+                }
+
+                const textNodes = $getRoot().getAllTextNodes()
+                if (textNodes.length === 0) return null
+
+                const resolvePoint = (absoluteIndex: number) => {
+                    let consumed = 0
+                    for (const textNode of textNodes) {
+                        const size = textNode.getTextContentSize()
+                        const next = consumed + size
+                        if (absoluteIndex <= next) {
+                            return {
+                                key: textNode.getKey(),
+                                offset: Math.max(0, Math.min(absoluteIndex - consumed, size)),
+                            }
+                        }
+                        consumed = next
+                    }
+
+                    const lastNode = textNodes[textNodes.length - 1]
+                    return {
+                        key: lastNode.getKey(),
+                        offset: lastNode.getTextContentSize(),
+                    }
+                }
+
+                const start = resolvePoint(range.startIndex)
+                const end = resolvePoint(range.endIndex)
+                const absoluteSelection = $createRangeSelection()
+                absoluteSelection.anchor.set(start.key, start.offset, 'text')
+                absoluteSelection.focus.set(end.key, end.offset, 'text')
+                return absoluteSelection
+            }
+
+            const hasValidStoredKeys =
+                Boolean($getNodeByKey(range.startKey)) && Boolean($getNodeByKey(range.endKey))
+
+            const selection =
+                hasValidStoredKeys
+                    ? (() => {
+                        const keySelection = $createRangeSelection()
+                        keySelection.anchor.set(range.startKey, range.startOffset, 'text')
+                        keySelection.focus.set(range.endKey, range.endOffset, 'text')
+                        return keySelection
+                        })()
+                    : resolveSelectionByAbsoluteRange()
+
+            if (!selection) return
             $setSelection(selection)
             selection.insertText(acceptedText)
 
@@ -411,6 +497,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
                     activeRevisionNodeKeyRef.current = null
                 }
                 setHasInlineRevisionNode(false)
+                restoreEditorFocus()
                 return true
             },
             COMMAND_PRIORITY_LOW,
@@ -425,6 +512,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
                     activeRevisionNodeKeyRef.current = null
                 }
                 setHasInlineRevisionNode(false)
+                restoreEditorFocus()
                 return true
             },
             COMMAND_PRIORITY_LOW,
@@ -434,7 +522,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
             unregisterAccept()
             unregisterReject()
         }
-    }, [editor, acceptRevision, rejectRevision, applyAcceptedRevision, removeInlineRevisionNode])
+    }, [editor, acceptRevision, rejectRevision, applyAcceptedRevision, removeInlineRevisionNode, restoreEditorFocus])
 
     // Track text selection
     useEffect(() => {

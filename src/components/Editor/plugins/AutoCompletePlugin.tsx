@@ -62,11 +62,13 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
     })
     const [isInlineRevisionActive, setIsInlineRevisionActive] = useState(false)
     const [isAutocompleteSupressed, setIsAutocompleteSuppressed] = useState(false)
+    const [hasEditedSinceMount, setHasEditedSinceMount] = useState(false)
     const pendingNodeKeysRef = useRef<string[]>([])
     const activeSuggestionRef = useRef('')
     const insertionPointRef = useRef<InsertionPoint | null>(null)
     const previousInlineRevisionActiveRef = useRef(false)
     const suppressedContentRef = useRef<string | null>(null)
+    const initialContentRef = useRef<string | null>(null)
 
     const clearPendingSuggestionNodes = useCallback(() => {
         const pendingKeys = pendingNodeKeysRef.current
@@ -146,6 +148,11 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
                     allText += node.getTextContent()
                 }
             }
+            if (initialContentRef.current === null) {
+                initialContentRef.current = allText
+            } else if (!hasEditedSinceMount && allText !== initialContentRef.current) {
+                setHasEditedSinceMount(true)
+            }
 
             const wasInlineRevisionActive = previousInlineRevisionActiveRef.current
             if (wasInlineRevisionActive && !inlineRevisionActive) {
@@ -202,7 +209,7 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
                 })
             }
         })
-    }, [editor, isAutocompleteSupressed])
+    }, [editor, isAutocompleteSupressed, hasEditedSinceMount])
 
     // Extract context from editor and calculate cursor position
     useEffect(() => {
@@ -272,7 +279,7 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
         {
             providerName,
             delay,
-            enabled: !isInlineRevisionActive && !isAutocompleteSupressed
+            enabled: hasEditedSinceMount && !isInlineRevisionActive && !isAutocompleteSupressed
         }
     )
 
@@ -296,19 +303,19 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
 
     // Keep editor content in sync with streaming suggestion text.
     useEffect(() => {
-        if (isInlineRevisionActive || isAutocompleteSupressed) return
+        if (!hasEditedSinceMount || isInlineRevisionActive || isAutocompleteSupressed) return
         if (suggestion === activeSuggestionRef.current) return
         clearPendingSuggestionNodes()
         activeSuggestionRef.current = suggestion
         if (suggestion) {
             renderPendingSuggestion(suggestion)
         }
-    }, [suggestion, clearPendingSuggestionNodes, renderPendingSuggestion, isInlineRevisionActive, isAutocompleteSupressed])
+    }, [suggestion, clearPendingSuggestionNodes, renderPendingSuggestion, isInlineRevisionActive, isAutocompleteSupressed, hasEditedSinceMount])
 
     // Handle keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (isInlineRevisionActive || isAutocompleteSupressed) return
+            if (!hasEditedSinceMount || isInlineRevisionActive || isAutocompleteSupressed) return
             if (suggestion) {
                 if (event.key === 'Tab') {
                     event.preventDefault()
@@ -322,7 +329,7 @@ function AutoCompletePlugin({ providerName, delay, note }: AutoCompletePluginPro
 
         document.addEventListener('keydown', handleKeyDown)
         return () => document.removeEventListener('keydown', handleKeyDown)
-    }, [suggestion, accept, reject, isInlineRevisionActive, isAutocompleteSupressed])
+    }, [suggestion, accept, reject, isInlineRevisionActive, isAutocompleteSupressed, hasEditedSinceMount])
 
     useEffect(() => {
         return () => {

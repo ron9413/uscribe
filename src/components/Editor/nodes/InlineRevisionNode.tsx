@@ -19,6 +19,9 @@ export const ACCEPT_INLINE_REVISION_COMMAND = createCommand<{
 export const REJECT_INLINE_REVISION_COMMAND = createCommand<{ nodeKey: string }>()
 
 export interface InlineRevisionRange {
+    // Absolute offsets in the editor text stream; survives lexical key regeneration on reload.
+    startIndex?: number
+    endIndex?: number
     startOffset: number
     endOffset: number
     startKey: string
@@ -123,7 +126,6 @@ export class InlineRevisionNode extends DecoratorNode<JSX.Element> {
 
     exportJSON(): SerializedInlineRevisionNode {
         return {
-            ...super.exportJSON(),
             type: 'inline-revision',
             version: 1,
             original: this.__original,
