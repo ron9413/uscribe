@@ -38,7 +38,11 @@ Built-in global shortcuts:
 
 - Node.js 18+ (recommended)
 - npm
-- For local models: Ollama (optional)
+- For local models: Ollama (optional, install from https://ollama.com/download first)
+
+## Platform support note
+
+uScribe has been mainly tested on macOS. Windows and Linux support is available but has not been fully tested yet.
 
 ## Getting started
 
@@ -83,6 +87,10 @@ If run outside Electron (browser-only fallback), localStorage is used instead.
 
 ## Troubleshooting
 
+- macOS global shortcuts not triggering:
+	- Grant uScribe access in **Privacy & Security → Accessibility**
+- Notes not saving/loading on macOS:
+	- Allow uScribe access to the **Documents** folder (notes are stored in `Documents/uscribe`)
 - Global shortcuts not triggering:
 	- Ensure uScribe is running and has registered shortcuts
 	- Check if another app already owns the same shortcut
