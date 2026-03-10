@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, globalShortcut, clipboard, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, safeStorage, globalShortcut, clipboard, Notification, screen } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { createRequire } from 'module'
@@ -262,9 +262,12 @@ async function promptForBackgroundCustomInstruction(sourceAppBundleId?: SourceAp
 
         ipcMain.on(BACKGROUND_PROMPT_CHANNEL, handlePromptResponse)
 
+        const windowWidth = 520
+        const windowHeight = 92
+
         backgroundPromptWindow = new BrowserWindow({
-            width: 520,
-            height: 92,
+            width: windowWidth,
+            height: windowHeight,
             resizable: false,
             minimizable: false,
             maximizable: false,
@@ -274,11 +277,34 @@ async function promptForBackgroundCustomInstruction(sourceAppBundleId?: SourceAp
             transparent: true,
             hasShadow: true,
             backgroundColor: '#00000000',
+            show: false,
             webPreferences: {
                 nodeIntegration: true,
                 contextIsolation: false,
                 sandbox: false
             },
+        })
+
+        // Keep the prompt window on the same Space as the active app insetad of
+        // switching to the Space where mainWindow lives. Set while hidden so the
+        // first time the window is shown it is already visible on all workspaces
+        // (avoid macOS switching to the main window's space on first use).
+        if (process.platform === 'darwin') {
+            backgroundPromptWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+        }
+
+        // Center on whichever display the cursor is currently on.
+        const cursorPoint = screen.getCursorScreenPoint()
+        const { workArea } = screen.getDisplayNearestPoint(cursorPoint)
+        backgroundPromptWindow.setPosition(
+            Math.round(workArea.x + (workArea.width - windowWidth) / 2),
+            Math.round(workArea.y + (workArea.height - windowHeight) / 2),
+        )
+
+        backgroundPromptWindow.once('ready-to-show', () => {
+            if (backgroundPromptWindow && !backgroundPromptWindow.isDestroyed()) {
+                backgroundPromptWindow.show()
+            }
         })
 
         const html = `
