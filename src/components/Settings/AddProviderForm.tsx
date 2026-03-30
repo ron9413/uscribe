@@ -55,11 +55,11 @@ function AddProviderForm({
     const [deleteError, setDeleteError] = useState('')
 
     const modelOptions: Record<AIProvider['type'], string[]> = {
-        openai: ['gpt-4', 'gpt-4-turbo-preview', 'gpt-3.5-turbo'],
-        azure: ['gpt-4', 'gpt-3.5-turbo'],
-        claude: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
+        openai: ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4'],
+        azure: [],
+        claude: ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-6'],
         ollama: [],
-        litellm: ['gpt-4', 'gpt-3.5-turbo', 'claude-3-sonnet-20240229', 'gemini-pro'],
+        litellm: [],
     }
 
     // Fetch Ollama models when type is ollama
@@ -608,7 +608,6 @@ function AddProviderForm({
                     <div>
                         <label className="block text-sm font-medium mb-1">
                             Model
-                            <span className="text-xs text-gray-500 ml-2">(select or type custom)</span>
                         </label>
                         <input
                             type="text"
@@ -617,7 +616,11 @@ function AddProviderForm({
                             onChange={(e) =>
                                 setFormData({ ...formData, model: e.target.value })
                             }
-                            placeholder="Select or type a model name"
+                            placeholder={
+                                modelOptions[formData.type].length > 0
+                                    ? 'Select or type a model name'
+                                    : 'Type a model name'
+                            }
                             className={`w-full px-3 py-2 border rounded outline-none ${
                                 errors.model ? 'border-red-500' : 'border-gray-300'
                             }`}
