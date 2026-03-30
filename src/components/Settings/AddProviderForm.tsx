@@ -6,6 +6,7 @@ interface AddProviderFormProps {
     onCancel: () => void
     isLoading: boolean
     editingProvider?: AIProvider
+    existingProviderNames: string[]
 }
 
 interface OllamaModel {
@@ -20,7 +21,13 @@ interface OllamaModel {
     }
 }
 
-function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProviderFormProps) {
+function AddProviderForm({
+    onAdd,
+    onCancel,
+    isLoading,
+    editingProvider,
+    existingProviderNames,
+}: AddProviderFormProps) {
     const [formData, setFormData] = useState({
         name: editingProvider?.name || '',
         type: editingProvider?.type || ('openai' as AIProvider['type']),
@@ -37,6 +44,11 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
     const [pullProgress, setPullProgress] = useState('')
     const [isPulling, setIsPulling] = useState(false)
     const pullAbortControllerRef = useRef<AbortController | null>(null)
+    const pullCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+    const [modelToDelete, setModelToDelete] = useState('')
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [deleteError, setDeleteError] = useState('')
 
     const modelOptions: Record<AIProvider['type'], string[]> = {
         openai: ['gpt-4', 'gpt-4-turbo-preview', 'gpt-3.5-turbo'],
@@ -53,10 +65,41 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
         }
     }, [formData.type])
 
+    useEffect(() => {
+        setFormData({
+            name: editingProvider?.name || '',
+            type: editingProvider?.type || ('openai' as AIProvider['type']),
+            apiKey: '',
+            baseUrl: editingProvider?.baseUrl || '',
+            model: editingProvider?.model || '',
+        })
+        setErrors({})
+        setModelToPull('')
+        setPullProgress('')
+        setDeleteError('')
+    }, [editingProvider])
+
+    useEffect(() => {
+        return () => {
+            pullAbortControllerRef.current?.abort()
+            if (pullCloseTimeoutRef.current) {
+                clearTimeout(pullCloseTimeoutRef.current)
+            }
+        }
+    }, [])
+
+    const getOllamaApiBaseUrl = () => {
+        const base = (formData.baseUrl || editingProvider?.baseUrl || 'http://127.0.0.1:11434')
+            .replace(/localhost/ig, '127.0.0.1')
+            .replace(/\/+$/, '')
+
+        return base.endsWith('/v1') ? base.slice(0, -3) : base
+    }
+
     const fetchOllamaModels = async () => {
         setLoadingOllamaModels(true)
         try {
-            const response = await fetch('http://localhost:11434/api/tags')
+            const response = await fetch(`${getOllamaApiBaseUrl()}/api/tags`)
 
             if (!response.ok) {
                 throw new Error('Failed to fetch Ollama models. Is Ollama running?')
@@ -64,10 +107,10 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
 
             const data = await response.json()
             setOllamaModels(data.models || [])
-            setErrors({ ...errors, ollama: '' })
+            setErrors((prev) => ({ ...prev, ollama: '' }))
         } catch (error: any) {
             console.error('Error fetching Ollama models:', error)
-            setErrors({ ...errors, ollama: error.message })
+            setErrors((prev) => ({ ...prev, ollama: error.message }))
             setOllamaModels([])
         } finally {
             setLoadingOllamaModels(false)
@@ -90,7 +133,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
             const abortController = new AbortController()
             pullAbortControllerRef.current = abortController
 
-            const response = await fetch('http://localhost:11434/api/pull', {
+            const response = await fetch(`${getOllamaApiBaseUrl()}/api/pull`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: modelToPull, stream: true }),
@@ -103,14 +146,17 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
 
             const reader = response.body?.getReader()
             const decoder = new TextDecoder()
+            let pendingLine = ''
 
             if (reader) {
                 while (true) {
                     const { done, value } = await reader.read()
                     if (done) break
 
-                    const text = decoder.decode(value)
-                    const lines = text.split('\n').filter(line => line.trim())
+                    const text = pendingLine + decoder.decode(value, { stream: true })
+                    const parts = text.split('\n')
+                    pendingLine = parts.pop() || ''
+                    const lines = parts.filter(line => line.trim())
 
                     for (const line of lines) {
                         try {
@@ -127,19 +173,37 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                         }
                     }
                 }
+
+                // Flush decoder and parse the last pending JSON line if present.
+                const finalChunk = pendingLine + decoder.decode()
+                if (finalChunk.trim()) {
+                    try {
+                        const json = JSON.parse(finalChunk)
+                        if (json.status) {
+                            setPullProgress(
+                                json.total && json.completed
+                                    ? `${json.status}: ${Math.round((json.completed / json.total) * 100)}%`
+                                    : json.status
+                            )
+                        }
+                    } catch (e) {
+                        // Ignore trailing JSON parse errors
+                    }
+                }
             }
 
             setPullProgress('Download complete!')
             await fetchOllamaModels() // Refresh model list
 
             // Auto-select the pulled model
-            setFormData({ ...formData, model: modelToPull })
+            setFormData((prev) => ({ ...prev, model: modelToPull }))
 
-            setTimeout(() => {
+            pullCloseTimeoutRef.current = setTimeout(() => {
                 setShowPullDialog(false)
                 setIsPulling(false)
                 setPullProgress('')
                 pullAbortControllerRef.current = null
+                pullCloseTimeoutRef.current = null
             }, 1500)
         } catch (error: any) {
             if (error?.name === 'AbortError') {
@@ -160,21 +224,85 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
         if (isPulling) {
             pullAbortControllerRef.current?.abort()
         }
+        if (pullCloseTimeoutRef.current) {
+            clearTimeout(pullCloseTimeoutRef.current)
+            pullCloseTimeoutRef.current = null
+        }
         setShowPullDialog(false)
         setModelToPull('')
         setPullProgress('')
     }
 
+    const confirmDeleteModel = async () => {
+        setIsDeleting(true)
+        setDeleteError('')
+        try {
+            const response = await fetch(`${getOllamaApiBaseUrl()}/api/delete`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: modelToDelete }),
+            })
+
+            if (!response.ok) {
+                const errText = await response.text().catch(() => '')
+                throw new Error(errText || `Failed to delete model (${response.status})`)
+            }
+
+            await fetchOllamaModels()
+            if (formData.model === modelToDelete) {
+                setFormData((prev) => ({ ...prev, model: '' }))
+            }
+            setShowDeleteDialog(false)
+            setModelToDelete('')
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Failed to delete model'
+            setDeleteError(message)
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
+    const handleCancelDelete = () => {
+        if (!isDeleting) {
+            setShowDeleteDialog(false)
+            setModelToDelete('')
+            setDeleteError('')
+        }
+    }
+
     const validate = () => {
         const newErrors: Record<string, string> = {}
+        const providerTypeChanged = !!editingProvider && editingProvider.type !== formData.type
+        const normalizedName = formData.name.trim().toLowerCase()
+        const editingName = editingProvider?.name.trim().toLowerCase()
 
         if (!formData.name.trim()) {
             newErrors.name = 'Name is required'
+        } else {
+            const duplicateName = existingProviderNames.some((existingName) => {
+                const existingNormalized = existingName.trim().toLowerCase()
+                if (isEditMode && editingName && existingNormalized === editingName) {
+                    return false
+                }
+                return existingNormalized === normalizedName
+            })
+
+            if (duplicateName) {
+                newErrors.name = 'Provider name already exists'
+            }
         }
 
-        // API key is required only when adding a new provider (not editing) or when type is not ollama
-        if (formData.type !== 'ollama' && !formData.apiKey.trim() && !isEditMode) {
-            newErrors.apiKey = 'API key is required'
+        // API key is required for:
+        // - new non-ollama providers
+        // - any edit that switches to a different keyed provider type
+        if (
+            formData.type !== 'ollama' &&
+            !formData.apiKey.trim() &&
+            (!isEditMode || providerTypeChanged)
+        ) {
+            newErrors.apiKey = providerTypeChanged
+                ? 'API key is required when changing provider type'
+                : 'API key is required'
         }
 
         if (!formData.model) {
@@ -338,31 +466,78 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                             </div>
                         ) : ollamaModels.length > 0 ? (
                             <div className="space-y-1 max-h-48 overflow-y-auto border border-gray-300 rounded p-2 bg-white mb-3">
-                                {ollamaModels.map((model) => (
-                                    <label
+                                {ollamaModels.map((model) => {
+                                    const isSelectedModel = formData.model === model.name
+                                    return (
+                                    <div
                                         key={model.name}
-                                        className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer"
+                                        className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded"
                                     >
-                                        <input
-                                            type="radio"
-                                            name="ollamaModel"
-                                            value={model.name}
-                                            checked={formData.model === model.name}
-                                            onChange={(e) =>
-                                                setFormData({ ...formData, model: e.target.value })
-                                            }
-                                            className="mr-3"
-                                        />
-                                        <div className="flex-1">
-                                            <div className="text-sm font-medium">{model.name}</div>
-                                            <div className="text-xs text-gray-500">
-                                                {formatBytes(model.size)}
-                                                {model.details?.parameter_size && ` • ${model.details.parameter_size}`}
-                                                {model.details?.quantization_level && ` • ${model.details.quantization_level}`}
+                                        <label className="flex items-center flex-1 min-w-0 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="ollamaModel"
+                                                value={model.name}
+                                                checked={formData.model === model.name}
+                                                onChange={(e) =>
+                                                    setFormData({ ...formData, model: e.target.value })
+                                                }
+                                                className="mr-3 shrink-0"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium truncate">{model.name}</div>
+                                                <div className="text-xs text-gray-500">
+                                                    {formatBytes(model.size)}
+                                                    {model.details?.parameter_size && ` • ${model.details.parameter_size}`}
+                                                    {model.details?.quantization_level && ` • ${model.details.quantization_level}`}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </label>
-                                ))}
+                                        </label>
+                                        <button
+                                            type="button"
+                                            disabled={isSelectedModel}
+                                            aria-label={
+                                                isSelectedModel
+                                                    ? `Cannot remove ${model.name} while it is selected`
+                                                    : `Remove model ${model.name}`
+                                            }
+                                            title={
+                                                isSelectedModel
+                                                    ? 'Select another model first to remove this one'
+                                                    : 'Remove model'
+                                            }
+                                            onClick={() => {
+                                                if (isSelectedModel) return
+                                                setModelToDelete(model.name)
+                                                setDeleteError('')
+                                                setShowDeleteDialog(true)
+                                            }}
+                                            className={`shrink-0 p-0.5 rounded flex items-center justify-center ${
+                                                isSelectedModel
+                                                    ? 'text-gray-300 cursor-not-allowed'
+                                                    : 'text-gray-400 hover:text-red-600'
+                                            }`}
+                                        >
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="1.5"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                className="w-3.5 h-3.5"
+                                                aria-hidden
+                                            >
+                                                <polyline points="3 6 5 6 21 6" />
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                                <line x1="10" y1="11" x2="10" y2="17" />
+                                                <line x1="14" y1="11" x2="14" y2="17" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    )
+                                })}
                             </div>
                         ) : (
                             <div className="p-4 text-center text-gray-500 text-sm border border-gray-300 rounded mb-3">
@@ -386,7 +561,7 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                                     value={modelToPull}
                                     onChange={(e) => setModelToPull(e.target.value)}
                                     className="flex-1 px-3 py-2 border border-gray-300 rounded outline-none text-sm"
-                                    onKeyPress={(e) => {
+                                    onKeyDown={(e) => {
                                         if (e.key === 'Enter' && modelToPull.trim()) {
                                             e.preventDefault()
                                             setShowPullDialog(true)
@@ -471,6 +646,43 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
             </form>
 
             {/* Pull Model Dialog */}
+            {showDeleteDialog && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                        <h3 className="text-lg font-semibold mb-4">Delete Ollama model</h3>
+
+                        <div className="mb-4">
+                            <p className="text-sm text-gray-700">
+                                Remove <span className="font-semibold">{modelToDelete}</span> from your machine?
+                                This frees disk space and cannot be undone from here (you can pull it again later).
+                            </p>
+                            {deleteError && (
+                                <p className="text-sm text-red-600 mt-3">{deleteError}</p>
+                            )}
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={confirmDeleteModel}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-red-300"
+                            >
+                                {isDeleting ? 'Deleting…' : 'Delete model'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCancelDelete}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:bg-gray-100"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {showPullDialog && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
@@ -518,7 +730,6 @@ function AddProviderForm({onAdd, onCancel, isLoading, editingProvider }: AddProv
                                 onClick={() => {
                                     handleCancelPull()
                                 }}
-                                disabled={isPulling}
                                 className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
                             >
                                 {isPulling ? 'Cancel Download' : 'Cancel'}

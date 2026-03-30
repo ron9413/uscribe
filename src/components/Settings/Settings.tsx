@@ -101,6 +101,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
             setInitializingProvider(provider.name)
 
             const storage = getStorage()
+            const providerTypeChanged = !!editingProvider && editingProvider.type !== provider.type
 
             // Handle API key
             if (editingProvider) {
@@ -110,6 +111,10 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                     await storage.storeApiKey(provider.name, apiKey)
                 } else {
                     // No new API key provided, use the existing one
+                    if (providerTypeChanged && provider.type !== 'ollama') {
+                        throw new Error('API key is required when changing provider type')
+                    }
+
                     const existingApiKey = await storage.getApiKey(editingProvider.name)
                     if (existingApiKey) {
                         apiKey = existingApiKey
@@ -345,6 +350,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                                                     }}
                                                     isLoading={!!initializingProvider}
                                                     editingProvider={editingProvider}
+                                                    existingProviderNames={localConfig.providers.map(p => p.name)}
                                                 />
                                             )}
                                         </div>
@@ -370,6 +376,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                                 }}
                                 isLoading={!!initializingProvider}
                                 editingProvider={editingProvider}
+                                existingProviderNames={localConfig.providers.map(p => p.name)}
                             />
                         )}
                     </section>
