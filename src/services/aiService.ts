@@ -36,6 +36,17 @@ interface StreamTextRequestOptions {
     abortSignal?: AbortSignal
 }
 
+function isAbortLikeError(error: unknown): boolean {
+    if (error instanceof Error) {
+        const name = error.name?.toLowerCase() ?? ''
+        const message = error.message?.toLowerCase() ?? ''
+        if (name.includes('abort')) return true
+        if (message.includes('aborted')) return true
+    }
+
+    return false
+}
+
 
 class AIService {
     private providers: Map<string, AIProvider> = new Map()
@@ -177,7 +188,14 @@ class AIService {
                 yield* this.streamOpenAICompatibleText(client, requestBody, abortController)
             }
         } catch (error) {
-            console.error(`Error in ${options.errorLabel}:`, error)
+            const isExpectedAbort =
+                abortController.signal.aborted ||
+                externalAbortSignal?.aborted ||
+                isAbortLikeError(error)
+
+            if (!isExpectedAbort) {
+                console.error(`Error in ${options.errorLabel}:`, error)
+            }
             throw error
         } finally {
             if (externalAbortSignal) {

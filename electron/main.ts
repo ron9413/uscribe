@@ -23,6 +23,8 @@ const KEYS_FILE = path.join(app.getPath('userData'), 'keys.json')
 let mainWindow: BrowserWindow | null = null
 let backgroundPromptWindow: BrowserWindow | null = null
 let isBackgroundRevisionRunning = false
+let isBackgroundRevisionCancelRequested = false
+let isBackgroundEscapeCancelRegistered = false
 
 const COPY_WAIT_TIMEOUT_MS = 1000
 const CLIPBOARD_POLL_INTERVAL_MS = 40
@@ -228,6 +230,37 @@ function showBackgroundRevisionNotification(title: string, body?: string): void 
     } catch (error) {
         console.error('Failed to show background revision notification:', error)
     }
+}
+
+function requestBackgroundRevisionCancel(): void {
+    if (!isBackgroundRevisionRunning) return
+    isBackgroundRevisionCancelRequested = true
+    aiService.cancelAllCompletions()
+}
+
+function registerBackgroundEscapeCancelShortcut(): boolean {
+    if (isBackgroundEscapeCancelRegistered) return true
+    if (globalShortcut.isRegistered('Escape')) {
+        console.warn('Escape key already registered; background revision cancel shortcut unavailable.')
+        return false
+    }
+
+    const registered = globalShortcut.register('Escape', () => {
+        requestBackgroundRevisionCancel()
+    })
+
+    if (registered) {
+        isBackgroundEscapeCancelRegistered = true
+    } else {
+        console.warn('Failed to register Escape key for background revision cancellation.')
+    }
+    return registered
+}
+
+function unregisterBackgroundEscapeCancelShortcut(): void {
+    if (!isBackgroundEscapeCancelRegistered) return
+    globalShortcut.unregister('Escape')
+    isBackgroundEscapeCancelRegistered = false
 }
 
 async function promptForBackgroundCustomInstruction(sourceAppBundleId?: SourceAppReference | null) : Promise<string | null> {
@@ -516,11 +549,21 @@ async function runBackgroundRevisionShortcut(
     }
 
     isBackgroundRevisionRunning = true
+    isBackgroundRevisionCancelRequested = false
+    const hasEscapeCancelShortcut = registerBackgroundEscapeCancelShortcut()
     const originalClipboardText = clipboard.readText()
     const sourceAppBundleId = options.sourceAppBundleId ?? (await getForegroundSourceApp())
+    const returnIfCancelled = () => {
+        if (!isBackgroundRevisionCancelRequested) return false
+        showBackgroundRevisionNotification(APP_NAME, 'Revision cancelled.')
+        return true
+    }
 
     try {
+        if (returnIfCancelled()) return
+
         const selectedText = options.selectedText ?? (await captureSelectedText())
+        if (returnIfCancelled()) return
         if (!selectedText || !selectedText.trim()) {
             clipboard.writeText(originalClipboardText)
             showBackgroundRevisionNotification(APP_NAME, 'No selected text found to revise.')
@@ -530,6 +573,7 @@ async function runBackgroundRevisionShortcut(
         showBackgroundRevisionNotification(APP_NAME, 'Revising selected text...')
 
         const providerName = await ensureActiveProviderReady()
+        if (returnIfCancelled()) return
         if (!providerName) {
             showBackgroundRevisionNotification(APP_NAME, 'Background revision unavailable: no active provider.')
             return
@@ -542,6 +586,7 @@ async function runBackgroundRevisionShortcut(
             payload.customPrompt,
             { prefix: '', suffix: '' },
         )
+        if (returnIfCancelled()) return
         if (!revisedText || revisedText === selectedText) {
             showBackgroundRevisionNotification(APP_NAME, "No revision changes were generated.")
             return
@@ -553,11 +598,16 @@ async function runBackgroundRevisionShortcut(
         await sleep(PASTE_WAIT_MS)
         showBackgroundRevisionNotification(APP_NAME, 'Revision complete.')
     } catch (error) {
+        if (returnIfCancelled()) return
         console.error('Background revision shortcut failed:', error)
         showBackgroundRevisionNotification(APP_NAME, 'Background revision failed.')
     } finally {
         clipboard.writeText(originalClipboardText)
         isBackgroundRevisionRunning = false
+        isBackgroundRevisionCancelRequested = false
+        if (hasEscapeCancelShortcut) {
+            unregisterBackgroundEscapeCancelShortcut()
+        }
     }
 }
 
