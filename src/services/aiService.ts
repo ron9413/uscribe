@@ -48,6 +48,65 @@ function isAbortLikeError(error: unknown): boolean {
     return false
 }
 
+function getOpenAIErrorText(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message
+    }
+    if (error && typeof error === 'object') {
+        const e = error as Record<string, unknown>
+        if (typeof e.message === 'string') {
+            return e.message
+        }
+        const inner = e.error
+        if (inner && typeof inner === 'object' && typeof (inner as { message?: string }).message === 'string') {
+            return (inner as { message: string }).message
+        }
+    }
+    return String(error)
+}
+
+/**
+ * OpenAI Chat Completions: reasoning and newer chat models expect max_completion_tokens;
+ * older models use max_tokens.
+ */
+function openAIChatModelPrefersMaxCompletionTokens(model: string): boolean {
+    const m = model.trim().toLowerCase()
+    if (!m) return false
+    if (/^o\d/.test(m)) return true
+    if (m.startsWith('gpt-5')) return true
+    return false
+}
+
+function openAIChatTokenParamRetryPayload(error: unknown, payload: Record<string, unknown>): Record<string, unknown> | null {
+    const msg = getOpenAIErrorText(error).toLowerCase()
+    if (!msg) return null
+
+    const maxTok = payload.max_tokens
+    const maxComp = payload.max_completion_tokens
+
+    if (typeof maxTok === 'number' && maxComp === undefined) {
+        if (
+            msg.includes('max_completion_tokens')
+            && (msg.includes('max_tokens') || msg.includes('not supported') || msg.includes('unsupported'))
+        ) {
+            const { max_tokens: _, ...rest } = payload
+            return { ...rest, max_completion_tokens: maxTok }
+        }
+    }
+
+    if (typeof maxComp === 'number' && maxTok === undefined) {
+        if (
+            msg.includes('max_completion_tokens')
+            && (msg.includes('unknown') || msg.includes('unexpected') || msg.includes('unsupported'))
+        ) {
+            const { max_completion_tokens: _, ...rest } = payload
+            return { ...rest, max_tokens: maxComp }
+        }
+    }
+
+    return null
+}
+
 
 class AIService {
     private providers: Map<string, AIProvider> = new Map()
@@ -121,17 +180,31 @@ class AIService {
         requestBody: any,
         abortController: AbortController
     ): AsyncGenerator<string> {
-        const stream = await client.chat.completions.create(
-            { ...requestBody, stream: true },
-            { signal: abortController.signal }
-        )
+        let payload: Record<string, unknown> = { ...requestBody, stream: true }
 
-        for await (const chunk of stream) {
-            if (abortController.signal.aborted) break
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const stream = await client.chat.completions.create(
+                    payload,
+                    { signal: abortController.signal }
+                )
 
-            const content = chunk.choices[0]?.delta?.content
-            if (content) {
-                yield content
+                for await (const chunk of stream) {
+                    if (abortController.signal.aborted) break
+
+                    const content = chunk.choices[0]?.delta?.content
+                    if (content) {
+                        yield content
+                    }
+                }
+                return
+            } catch (error) {
+                const next = openAIChatTokenParamRetryPayload(error, payload)
+                if (next && attempt === 0) {
+                    payload = { ...next, stream: true }
+                    continue
+                }
+                throw error
             }
         }
     }
@@ -237,8 +310,18 @@ class AIService {
                         role: 'user',
                         content: options.userPrompt,
                     }],
-                    max_tokens: options.maxTokens,
                     temperature: options.temperature,
+                }
+
+                if (options.maxTokens !== undefined) {
+                    const useCompletionTokens =
+                        (provider.type === 'openai' || provider.type === 'azure')
+                        && openAIChatModelPrefersMaxCompletionTokens(provider.model)
+                    if (useCompletionTokens) {
+                        requestBody.max_completion_tokens = options.maxTokens
+                    } else {
+                        requestBody.max_tokens = options.maxTokens
+                    }
                 }
 
                 if (options.stopSequences && options.stopSequences.length > 0) {
