@@ -21,6 +21,7 @@ import {
     $createInlineRevisionNode,
     $isInlineRevisionNode,
     ACCEPT_INLINE_REVISION_COMMAND,
+    CANCEL_INLINE_REVISION_COMMAND,
     REJECT_INLINE_REVISION_COMMAND,
 } from '../nodes/InlineRevisionNode'
 
@@ -110,6 +111,7 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
         revisionResult,
         acceptRevision,
         rejectRevision,
+        cancelRevision,
     } = useTextRevision({ providerName })
 
     // Store selection range helper
@@ -518,11 +520,35 @@ function TextRevisionPlugin({ providerName, customShortcuts }: TextRevisionPlugi
             COMMAND_PRIORITY_LOW,
         )
 
+        const unregisterCancel = editor.registerCommand(
+            CANCEL_INLINE_REVISION_COMMAND,
+            ({ nodeKey }) => {
+                removeInlineRevisionNode(nodeKey)
+                cancelRevision()
+                if (activeRevisionNodeKeyRef.current === nodeKey) {
+                    activeRevisionNodeKeyRef.current = null
+                }
+                setHasInlineRevisionNode(false)
+                restoreEditorFocus()
+                return true
+            },
+            COMMAND_PRIORITY_LOW,
+        )
+
         return () => {
             unregisterAccept()
             unregisterReject()
+            unregisterCancel()
         }
-    }, [editor, acceptRevision, rejectRevision, applyAcceptedRevision, removeInlineRevisionNode, restoreEditorFocus])
+    }, [
+        editor,
+        acceptRevision,
+        rejectRevision,
+        cancelRevision,
+        applyAcceptedRevision,
+        removeInlineRevisionNode,
+        restoreEditorFocus,
+    ])
 
     // Track text selection
     useEffect(() => {

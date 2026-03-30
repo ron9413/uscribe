@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import type { Change } from 'diff'
 import {
@@ -16,6 +15,7 @@ export const ACCEPT_INLINE_REVISION_COMMAND = createCommand<{
     nodeKey: string
     editedText?: string
 }>()
+export const CANCEL_INLINE_REVISION_COMMAND = createCommand<{ nodeKey: string }>()
 export const REJECT_INLINE_REVISION_COMMAND = createCommand<{ nodeKey: string }>()
 
 export interface InlineRevisionRange {
@@ -53,21 +53,19 @@ function InlineRevisionPreview({
     isLoading: boolean
 }) {
     const [editor] = useLexicalComposerContext()
-    const [editedText, setEditedText] = useState(revised)
-
-    useEffect(() => {
-        setEditedText(revised)
-    }, [revised])
 
     return (
         <InlineDiffPreview
-            result={{ original, revised: editedText }}
+            result={{ original, revised }}
             isLoading={isLoading}
             onAccept={(text) => {
                 editor.dispatchCommand(ACCEPT_INLINE_REVISION_COMMAND, {
                     nodeKey,
                     editedText: text,
                 })
+            }}
+            onCancel={() => {
+                editor.dispatchCommand(CANCEL_INLINE_REVISION_COMMAND, { nodeKey })
             }}
             onReject={() => {
                 editor.dispatchCommand(REJECT_INLINE_REVISION_COMMAND, { nodeKey })

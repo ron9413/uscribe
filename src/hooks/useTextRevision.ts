@@ -68,7 +68,8 @@ export function useTextRevision(options: UseTextRevisionOptions) {
                 text,
                 action,
                 customPrompt,
-                revisionOptions
+                revisionOptions,
+                requestController.signal
             )) {
                 // Ignore stale results from superseded requests.
                 if (

@@ -33,6 +33,7 @@ interface StreamTextRequestOptions {
     maxTokens?: number
     temperature?: number
     stopSequences?: string[]
+    abortSignal?: AbortSignal
 }
 
 
@@ -108,6 +109,13 @@ class AIService {
     ) {
         if (provider.type === 'litellm') {
             requestBody.drop_params = true
+            return
+        }
+        if (provider.type === 'ollama') {
+            // Force-disable reasoning/thinking mode for all Ollama models.
+            requestBody.think = false
+            requestBody.reason_effort = 'none'
+            return
         }
     }
 
@@ -122,6 +130,17 @@ class AIService {
 
         const requestId = `${providerName}-${options.requestIdPrefix}-${Date.now()}`
         const abortController = this.createRequestController(requestId)
+        const externalAbortSignal = options.abortSignal
+        const handleExternalAbort = () => {
+            abortController.abort()
+        }
+        if (externalAbortSignal) {
+            if (externalAbortSignal.aborted) {
+                abortController.abort()
+            } else {
+                externalAbortSignal.addEventListener('abort', handleExternalAbort)
+            }
+        }
     
         try {
             if (provider.type === 'claude') {
@@ -161,6 +180,9 @@ class AIService {
             console.error(`Error in ${options.errorLabel}:`, error)
             throw error
         } finally {
+            if (externalAbortSignal) {
+                externalAbortSignal.removeEventListener('abort', handleExternalAbort)
+            }
             this.cleanupRequestController(requestId)
         }
     }
@@ -216,8 +238,8 @@ class AIService {
                     throw new Error(`Unsupported provider type: ${provider.type}`)
             }
         } catch (error) {
-                console.error(`Failed to initialize provider ${provider.name}:`, error)
-                throw error
+            console.error(`Failed to initialize provider ${provider.name}:`, error)
+            throw error
         }
     }
 
@@ -276,7 +298,8 @@ class AIService {
         text: string,
         action: RevisionAction,
         customPrompt?: string,
-        options: RevisionOptions = {}
+        options: RevisionOptions = {},
+        abortSignal?: AbortSignal
     ): AsyncGenerator<string> {
         const { provider } = this.getProviderAndClient(providerName)
 
@@ -306,6 +329,7 @@ class AIService {
             userPrompt: prompt.userPrompt,
             maxTokens: maxTokens,
             temperature: temperature,
+            abortSignal,
         })
     }
 
