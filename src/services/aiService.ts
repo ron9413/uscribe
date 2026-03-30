@@ -114,7 +114,7 @@ class AIService {
         if (provider.type === 'ollama') {
             // Force-disable reasoning/thinking mode for all Ollama models.
             requestBody.think = false
-            requestBody.reason_effort = 'none'
+            requestBody.reasoning_effort = 'none'
             return
         }
     }
