@@ -1,11 +1,11 @@
-import { Note, NoteMetadata, AIConfig, ElectronAPI } from '../types'
+import { AIProvider, AITextGenerateOptions, Note, NoteMetadata, AIConfig, ElectronAPI } from '../types'
+import { configContainsPlaintextApiKeys, sanitizeConfigForStorage } from '../utils/configSecurity'
 
 // Browser-based storage implementation using localStorage
 // This is a fallback for when the app runs in a browser (not Electron)
 class BrowserStorage implements ElectronAPI {
     private readonly NOTES_KEY = 'uscribe-storage'
     private readonly CONFIG_KEY = 'uscribe-config'
-    private readonly API_KEYS_KEY = 'uscribe-api-keys'
 
     async readNote(id: string): Promise<Note | null> {
         const notes = this.getAllNotes()
@@ -54,7 +54,7 @@ class BrowserStorage implements ElectronAPI {
 
         try {
             const parsed = JSON.parse(configStr) as Partial<AIConfig>
-            return {
+            const mergedConfig: AIConfig = {
                 ...defaultConfig,
                 ...parsed,
                 customRevisionShortcuts: Array.isArray(parsed.customRevisionShortcuts)
@@ -64,24 +64,45 @@ class BrowserStorage implements ElectronAPI {
                     }))
                     : [],
             }
+            const sanitizedConfig = sanitizeConfigForStorage(mergedConfig)
+
+            if (configContainsPlaintextApiKeys(mergedConfig)) {
+                localStorage.setItem(this.CONFIG_KEY, JSON.stringify(sanitizedConfig))
+                console.warn('Removed insecure plaintext API key fields from browser config.')
+            }
+
+            return sanitizedConfig
         } catch {
             return defaultConfig
         }
     }
 
     async saveConfig(config: AIConfig): Promise<void> {
-        localStorage.setItem(this.CONFIG_KEY, JSON.stringify(config))
+        const sanitizedConfig = sanitizeConfigForStorage(config)
+        localStorage.setItem(this.CONFIG_KEY, JSON.stringify(sanitizedConfig))
     }
 
     async storeApiKey(provider: string, key: string): Promise<void> {
-        const keys = this.getAllApiKeys()
-        keys[provider] = key
-        localStorage.setItem(this.API_KEYS_KEY, JSON.stringify(keys))
+        void provider
+        void key
+        throw new Error('Secure API key storage requires Electron runtime')
     }
 
     async getApiKey(provider: string): Promise<string | null> {
-        const keys = this.getAllApiKeys()
-        return keys[provider] || null
+        void provider
+        return null
+    }
+
+    async initializeProvider(_provider: AIProvider, _apiKey: string): Promise<void> {
+        throw new Error('AI provider initialization requires Electron runtime')
+    }
+
+    async generateText(_providerName: string, _options: AITextGenerateOptions): Promise<string> {
+        throw new Error('AI text generation requires Electron runtime')
+    }
+
+    async cancelAIRequests(): Promise<void> {
+        // No-op in browser fallback mode
     }
 
     private getAllNotes(): Record<string, Note> {
@@ -91,18 +112,6 @@ class BrowserStorage implements ElectronAPI {
         }
         try {
             return JSON.parse(notesStr)
-        } catch {
-            return {}
-        }
-    }
-
-    private getAllApiKeys(): Record<string, string> {
-        const keysStr = localStorage.getItem(this.API_KEYS_KEY)
-        if (!keysStr) {
-            return {}
-        }
-        try {
-            return JSON.parse(keysStr)
         } catch {
             return {}
         }
@@ -120,10 +129,12 @@ export function getStorage(): ElectronAPI {
     }
     // Fallback to browser storage
     if (typeof window !== 'undefined' && !window.electronAPI) {
+        // Clean up legacy plaintext API key cache from older browser fallback behavior.
+        localStorage.removeItem('uscribe-api-keys')
         // Only log once
         if (!sessionStorage.getItem('browser-storage-warning')) {
-            console.warn('⚠️ Running in browser mode. Using localStorage instead of secure Electron storage.')
-            console.info('💡 For production use, run the Electron app for secure API key storage.')
+            console.warn('Running in browser mode. API key storage is disabled for security.')
+            console.info('Run the Electron app to store API keys securely via system keychain.')
             sessionStorage.setItem('browser-storage-warning', 'true')
         }
     }

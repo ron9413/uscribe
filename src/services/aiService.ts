@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 import Anthropic from '@anthropic-ai/sdk'
-import { AIProvider, RevisionAction } from '../types'
+import { AIProvider, AITextGenerateOptions, ElectronAPI, RevisionAction } from '../types'
 import {
     DEFAULT_AUTOCOMPLETE_MAX_TOKENS,
     DEFAULT_AUTOCOMPLETE_TEMPERATURE,
@@ -11,6 +11,7 @@ import {
     DEFAULT_REVISION_TEMPERATURE,
     getRevisionTemplateForModel,
 } from './revisionTemplates/template'
+import { sanitizeProviderForStorage } from '../utils/configSecurity'
 
 interface AutocompleteOptions {
   prefix: string
@@ -53,6 +54,19 @@ class AIService {
     private clients: Map<string, any> = new Map()
     private abortControllers: Map<string, AbortController> = new Map()
 
+    private getElectronAPI(): ElectronAPI | null {
+        const globalObject = globalThis as unknown as {
+            window?: {
+                electronAPI?: ElectronAPI
+            }
+        }
+        return globalObject.window?.electronAPI ?? null
+    }
+
+    private isRendererAIBridgeAvailable(): boolean {
+        return !!this.getElectronAPI()
+    }
+
     private getProviderAndClient(providerName: string) {
         const provider = this.providers.get(providerName)
         const client = this.clients.get(providerName)
@@ -62,6 +76,14 @@ class AIService {
         }
 
         return { provider, client }
+    }
+
+    private getProviderOrThrow(providerName: string): AIProvider {
+        const provider = this.providers.get(providerName)
+        if (!provider) {
+            throw new Error(`Provider ${providerName} not initialized`)
+        }
+        return provider
     }
 
     private createRequestController(requestId: string) {
@@ -134,6 +156,45 @@ class AIService {
         providerName: string,
         options: StreamTextRequestOptions
     ): AsyncGenerator<string> {
+        const electronAPI = this.getElectronAPI()
+        if (electronAPI) {
+            const externalAbortSignal = options.abortSignal
+            const handleAbort = () => {
+                void electronAPI.cancelAIRequests().catch((error) => {
+                    console.warn('Failed to cancel AI requests via bridge:', error)
+                })
+            }
+
+            if (externalAbortSignal) {
+                if (externalAbortSignal.aborted) {
+                    handleAbort()
+                    return
+                }
+                externalAbortSignal.addEventListener('abort', handleAbort, { once: true })
+            }
+
+            try {
+                const text = await electronAPI.generateText(providerName, {
+                    requestIdPrefix: options.requestIdPrefix,
+                    logLabel: options.logLabel,
+                    errorLabel: options.errorLabel,
+                    systemPrompt: options.systemPrompt,
+                    userPrompt: options.userPrompt,
+                    maxTokens: options.maxTokens,
+                    temperature: options.temperature,
+                    stopSequences: options.stopSequences,
+                })
+                if (!externalAbortSignal?.aborted && text) {
+                    yield text
+                }
+            } finally {
+                if (externalAbortSignal) {
+                    externalAbortSignal.removeEventListener('abort', handleAbort)
+                }
+            }
+            return
+        }
+
         const { provider, client } = this.getProviderAndClient(providerName)
 
         console.log(`Streaming ${options.logLabel} with provider: ${providerName} (${provider.type})`)
@@ -206,27 +267,37 @@ class AIService {
     }
 
     async initializeProvider(provider: AIProvider, apiKey: string) {
-        this.providers.set(provider.name, provider)
+        const sanitizedProvider = sanitizeProviderForStorage(provider)
+        this.providers.set(sanitizedProvider.name, sanitizedProvider)
+
+        if (this.isRendererAIBridgeAvailable()) {
+            const electronAPI = this.getElectronAPI()
+            if (!electronAPI) {
+                throw new Error('Electron AI bridge unavailable')
+            }
+            await electronAPI.initializeProvider(sanitizedProvider, apiKey)
+            return
+        }
 
         try {
-            switch (provider.type) {
+            switch (sanitizedProvider.type) {
                 case 'openai':
-                    this.clients.set(provider.name, new OpenAI({
+                    this.clients.set(sanitizedProvider.name, new OpenAI({
                         apiKey,
                         dangerouslyAllowBrowser: true // Only for Electron app
                     }))
                     break
 
                 case 'azure':
-                    this.clients.set(provider.name, new OpenAI({
+                    this.clients.set(sanitizedProvider.name, new OpenAI({
                         apiKey,
-                        baseURL: provider.baseUrl,
+                        baseURL: sanitizedProvider.baseUrl,
                         dangerouslyAllowBrowser: true
                     }))
                     break
 
                 case 'claude':
-                    this.clients.set(provider.name, new Anthropic({
+                    this.clients.set(sanitizedProvider.name, new Anthropic({
                         apiKey,
                     }))
                     break
@@ -234,9 +305,9 @@ class AIService {
                 case 'ollama': {
                     // Use 127.0.0.1 instead of localhost so Node (e.g. main process) connects via IPv4.
                     // Otherwise localhost can resolve to ::1 and Ollama may only listen on 127.0.0.1.
-                    const ollamaBase = provider.baseUrl || 'http://127.0.0.1:11434/v1'
+                    const ollamaBase = sanitizedProvider.baseUrl || 'http://127.0.0.1:11434/v1'
                     const baseURL = ollamaBase.replace(/localhost/i, '127.0.0.1')
-                    this.clients.set(provider.name, new OpenAI({
+                    this.clients.set(sanitizedProvider.name, new OpenAI({
                         apiKey: 'ollama', // Ollama doesn't need a real key
                         baseURL,
                         dangerouslyAllowBrowser: true
@@ -245,20 +316,28 @@ class AIService {
                 }
 
                 case 'litellm':
-                    this.clients.set(provider.name, new OpenAI({
+                    this.clients.set(sanitizedProvider.name, new OpenAI({
                         apiKey,
-                        baseURL: provider.baseUrl || 'http://localhost:4000',
+                        baseURL: sanitizedProvider.baseUrl || 'http://localhost:4000',
                         dangerouslyAllowBrowser: true
                     }))
                     break
 
                 default:
-                    throw new Error(`Unsupported provider type: ${provider.type}`)
+                    throw new Error(`Unsupported provider type: ${sanitizedProvider.type}`)
             }
         } catch (error) {
-            console.error(`Failed to initialize provider ${provider.name}:`, error)
+            console.error(`Failed to initialize provider ${sanitizedProvider.name}:`, error)
             throw error
         }
+    }
+
+    async generateText(providerName: string, options: AITextGenerateOptions): Promise<string> {
+        let text = ''
+        for await (const chunk of this.streamTextRequest(providerName, options)) {
+            text += chunk
+        }
+        return text
     }
 
     cancelCompletion(requestId: string) {
@@ -270,6 +349,12 @@ class AIService {
     }
 
     cancelAllCompletions() {
+        const electronAPI = this.getElectronAPI()
+        if (electronAPI) {
+            void electronAPI.cancelAIRequests().catch((error) => {
+                console.warn('Failed to cancel AI requests via bridge:', error)
+            })
+        }
         this.abortControllers.forEach(controller => controller.abort())
         this.abortControllers.clear()
     }
@@ -278,7 +363,7 @@ class AIService {
         providerName: string,
         options: AutocompleteOptions
     ): AsyncGenerator<string> {
-        const { provider } = this.getProviderAndClient(providerName)
+        const provider = this.getProviderOrThrow(providerName)
 
         // Get the appropriate template for this model
         const template = getAutocompleteTemplateForModel(provider.model)
@@ -319,7 +404,7 @@ class AIService {
         options: RevisionOptions = {},
         abortSignal?: AbortSignal
     ): AsyncGenerator<string> {
-        const { provider } = this.getProviderAndClient(providerName)
+        const provider = this.getProviderOrThrow(providerName)
 
         console.log(`Streaming revision with action: ${action}`)
 

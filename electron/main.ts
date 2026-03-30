@@ -7,7 +7,8 @@ import fs from 'fs/promises'
 import { existsSync } from 'fs'
 import os from 'os'
 import { aiService } from '../src/services/aiService'
-import { AIConfig, AIProvider, RevisionAction } from '../src/types'
+import { AIConfig, AIProvider, AITextGenerateOptions, RevisionAction } from '../src/types'
+import { configContainsPlaintextApiKeys, sanitizeConfigForStorage, sanitizeProviderForStorage } from '../src/utils/configSecurity'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -462,7 +463,7 @@ async function loadConfigFromDisk(): Promise<AIConfig> {
         const content = await fs.readFile(CONFIG_FILE, 'utf-8')
         const parsed = JSON.parse(content) as Partial<AIConfig>
         const defaults = getDefaultConfig()
-        return {
+        const mergedConfig: AIConfig = {
             ...defaults,
             ...parsed,
             customRevisionShortcuts: Array.isArray(parsed.customRevisionShortcuts)
@@ -472,6 +473,12 @@ async function loadConfigFromDisk(): Promise<AIConfig> {
                 }))
                 : defaults.customRevisionShortcuts,
         }
+        const sanitizedConfig = sanitizeConfigForStorage(mergedConfig)
+        if (configContainsPlaintextApiKeys(mergedConfig)) {
+            console.warn('Removed insecure plaintext API key fields from config.json.')
+            await fs.writeFile(CONFIG_FILE, JSON.stringify(sanitizedConfig, null, 2))
+        }
+        return sanitizedConfig
     } catch (error) {
         console.error('Error reading config from disk:', error)
         return getDefaultConfig()
@@ -822,8 +829,9 @@ ipcMain.handle('get-config', async () => {
 
 ipcMain.handle('save-config', async (_, config: any) => {
     try {
-        await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2))
-        await registerGlobalShortcuts(config as AIConfig)
+        const sanitizedConfig = sanitizeConfigForStorage(config as AIConfig)
+        await fs.writeFile(CONFIG_FILE, JSON.stringify(sanitizedConfig, null, 2))
+        await registerGlobalShortcuts(sanitizedConfig)
     } catch (error) {
         console.error('Error saving config:', error)
         throw error
@@ -854,6 +862,31 @@ ipcMain.handle('store-api-key', async (_, provider: string, key: string) => {
 
 ipcMain.handle('get-api-key', async (_, provider: string) => {
     return getApiKeyFromDisk(provider)
+})
+
+ipcMain.handle('initialize-ai-provider', async (_, provider: AIProvider, apiKey: string) => {
+    try {
+        await aiService.initializeProvider(sanitizeProviderForStorage(provider), apiKey)
+    } catch (error) {
+        console.error(`Error initializing provider "${provider?.name}":`, error)
+        throw error
+    }
+})
+
+ipcMain.handle(
+    'ai-generate-text',
+    async (_, providerName: string, options: AITextGenerateOptions) => {
+        try {
+            return await aiService.generateText(providerName, options)
+        } catch (error) {
+            console.error(`Error generating text for provider "${providerName}":`, error)
+            throw error
+        }
+    },
+)
+
+ipcMain.handle('ai-cancel-requests', async () => {
+    aiService.cancelAllCompletions()
 })
 
 // App lifecycle

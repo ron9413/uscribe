@@ -44,6 +44,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
     })
     const [showAddForm, setShowAddForm] = useState(false)
     const [editingProvider, setEditingProvider] = useState<AIProvider | undefined>(undefined)
+    const [editingProviderHasStoredKey, setEditingProviderHasStoredKey] = useState(false)
     const [initializingProvider, setInitializingProvider] = useState<string>('')
     const [newShortcut, setNewShortcut] = useState<CustomShortcutDraft>({
         name: '',
@@ -158,6 +159,7 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
 
             setShowAddForm(false)
             setEditingProvider(undefined)
+            setEditingProviderHasStoredKey(false)
         } catch (error) {
             console.error('Error adding/updating provider:', error)
             alert('Failed to add/update provider. Please check your API key and try again.')
@@ -169,6 +171,15 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
     const handleEditProvider = (provider: AIProvider) => {
         setEditingProvider(provider)
         setShowAddForm(true)
+        void (async () => {
+            try {
+                const storage = getStorage()
+                const existingKey = await storage.getApiKey(provider.name)
+                setEditingProviderHasStoredKey(!!existingKey)
+            } catch (error) {
+                setEditingProviderHasStoredKey(false)
+            }
+        })()
     }
 
     const handleRemoveProvider = (name: string) => {
@@ -347,10 +358,12 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                                                     onCancel={() => {
                                                         setShowAddForm(false)
                                                         setEditingProvider(undefined)
+                                                        setEditingProviderHasStoredKey(false)
                                                     }}
                                                     isLoading={!!initializingProvider}
                                                     editingProvider={editingProvider}
                                                     existingProviderNames={localConfig.providers.map(p => p.name)}
+                                                    hasStoredApiKey={editingProviderHasStoredKey}
                                                 />
                                             )}
                                         </div>
@@ -373,10 +386,12 @@ function Settings({ config, onSave, onClose }: SettingsProps) {
                                 onCancel={() => {
                                     setShowAddForm(false)
                                     setEditingProvider(undefined)
+                                    setEditingProviderHasStoredKey(false)
                                 }}
                                 isLoading={!!initializingProvider}
                                 editingProvider={editingProvider}
                                 existingProviderNames={localConfig.providers.map(p => p.name)}
+                                hasStoredApiKey={false}
                             />
                         )}
                     </section>

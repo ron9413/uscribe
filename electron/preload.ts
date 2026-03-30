@@ -11,6 +11,11 @@ const electronAPI: ElectronAPI = {
     storeApiKey: (provider: string, key: string) =>
         ipcRenderer.invoke('store-api-key', provider, key),
     getApiKey: (provider: string) => ipcRenderer.invoke('get-api-key', provider),
+    initializeProvider: (provider: any, apiKey: string) =>
+        ipcRenderer.invoke('initialize-ai-provider', provider, apiKey),
+    generateText: (providerName: string, options: any) =>
+        ipcRenderer.invoke('ai-generate-text', providerName, options),
+    cancelAIRequests: () => ipcRenderer.invoke('ai-cancel-requests'),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

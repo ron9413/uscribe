@@ -22,7 +22,6 @@ export interface NoteMetadata {
 export interface AIProvider {
     name: string;
     type: 'openai' | 'azure' | 'claude' | 'ollama' | 'litellm';
-    apiKey?: string;
     baseUrl?: string;
     model: string;
 }
@@ -60,6 +59,17 @@ export interface RevisionResult {
     diff: string;
 }
 
+export interface AITextGenerateOptions {
+    requestIdPrefix: string;
+    logLabel: string;
+    errorLabel: string;
+    systemPrompt: string;
+    userPrompt: string;
+    maxTokens?: number;
+    temperature?: number;
+    stopSequences?: string[];
+}
+
 // IPC types for Electron
 export interface ElectronAPI {
     // File operations
@@ -75,6 +85,11 @@ export interface ElectronAPI {
     // Secure storage
     storeApiKey: (provider: string, key: string) => Promise<void>;
     getApiKey: (provider: string) => Promise<string | null>;
+
+    // AI operations
+    initializeProvider: (provider: AIProvider, apiKey: string) => Promise<void>;
+    generateText: (providerName: string, options: AITextGenerateOptions) => Promise<string>;
+    cancelAIRequests: () => Promise<void>;
 }
 
 declare global {

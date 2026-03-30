@@ -7,6 +7,7 @@ interface AddProviderFormProps {
     isLoading: boolean
     editingProvider?: AIProvider
     existingProviderNames: string[]
+    hasStoredApiKey?: boolean
 }
 
 interface OllamaModel {
@@ -27,14 +28,17 @@ function AddProviderForm({
     isLoading,
     editingProvider,
     existingProviderNames,
+    hasStoredApiKey = false,
 }: AddProviderFormProps) {
+    const MASKED_API_KEY = '********'
     const [formData, setFormData] = useState({
         name: editingProvider?.name || '',
         type: editingProvider?.type || ('openai' as AIProvider['type']),
-        apiKey: '',
+        apiKey: editingProvider && hasStoredApiKey ? MASKED_API_KEY : '',
         baseUrl: editingProvider?.baseUrl || '',
         model: editingProvider?.model || '',
     })
+    const [apiKeyTouched, setApiKeyTouched] = useState(false)
 
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([])
@@ -69,15 +73,16 @@ function AddProviderForm({
         setFormData({
             name: editingProvider?.name || '',
             type: editingProvider?.type || ('openai' as AIProvider['type']),
-            apiKey: '',
+            apiKey: editingProvider && hasStoredApiKey ? MASKED_API_KEY : '',
             baseUrl: editingProvider?.baseUrl || '',
             model: editingProvider?.model || '',
         })
+        setApiKeyTouched(false)
         setErrors({})
         setModelToPull('')
         setPullProgress('')
         setDeleteError('')
-    }, [editingProvider])
+    }, [editingProvider, hasStoredApiKey])
 
     useEffect(() => {
         return () => {
@@ -275,6 +280,7 @@ function AddProviderForm({
         const providerTypeChanged = !!editingProvider && editingProvider.type !== formData.type
         const normalizedName = formData.name.trim().toLowerCase()
         const editingName = editingProvider?.name.trim().toLowerCase()
+        const typedApiKey = apiKeyTouched ? formData.apiKey.trim() : ''
 
         if (!formData.name.trim()) {
             newErrors.name = 'Name is required'
@@ -297,8 +303,8 @@ function AddProviderForm({
         // - any edit that switches to a different keyed provider type
         if (
             formData.type !== 'ollama' &&
-            !formData.apiKey.trim() &&
-            (!isEditMode || providerTypeChanged)
+            !typedApiKey &&
+            (!isEditMode || providerTypeChanged || !hasStoredApiKey)
         ) {
             newErrors.apiKey = providerTypeChanged
                 ? 'API key is required when changing provider type'
@@ -331,7 +337,8 @@ function AddProviderForm({
             baseUrl: formData.baseUrl || undefined,
         }
 
-        onAdd(provider, formData.apiKey)
+        const submittedApiKey = isEditMode && !apiKeyTouched ? '' : formData.apiKey
+        onAdd(provider, submittedApiKey)
     }
 
     const handleTypeChange = (type: AIProvider['type']) => {
@@ -397,17 +404,20 @@ function AddProviderForm({
                             API Key
                             {isEditMode && (
                                 <span className="text-xs text-gray-500 ml-2">
-                                    (leave empty to keep existing)
+                                    {hasStoredApiKey
+                                        ? '(stored key masked; type to replace)'
+                                        : '(type to set key)'}
                                 </span>
                             )}
                         </label>
                         <input
                             type="password"
                             value={formData.apiKey}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                                setApiKeyTouched(true)
                                 setFormData({ ...formData, apiKey: e.target.value })
-                            }
-                            placeholder={isEditMode ? "Leave empty to keep existing key" : "sk-..."}
+                            }}
+                            placeholder={isEditMode ? 'Type new key to replace' : 'sk-...'}
                             className={`w-full px-3 py-2 border rounded outline-none ${
                                 errors.apiKey ? 'border-red-500' : 'border-gray-300'
                             }`}

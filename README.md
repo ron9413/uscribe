@@ -83,7 +83,7 @@ uScribe stores:
 - **Config** in Electron app `userData` (`config.json`)
 - **API keys** encrypted with Electron `safeStorage` in `userData` (`keys.json`)
 
-If run outside Electron (browser-only fallback), localStorage is used instead.
+If run outside Electron (browser-only fallback), API key storage is disabled to avoid plaintext secrets.
 
 ## Troubleshooting
 
