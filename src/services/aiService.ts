@@ -37,6 +37,16 @@ interface StreamTextRequestOptions {
     abortSignal?: AbortSignal
 }
 
+/**
+ * Anthropic Messages API rejects stop sequences that contain no non-whitespace
+ * characters (e.g. "\n" alone). OpenAI-style "\n" stops are still allowed for other providers.
+ */
+function anthropicValidStopSequences(sequences: string[] | undefined): string[] | undefined {
+    if (!sequences?.length) return undefined
+    const filtered = sequences.filter((s) => /\S/.test(s))
+    return filtered.length > 0 ? filtered : undefined
+}
+
 function isAbortLikeError(error: unknown): boolean {
     if (error instanceof Error) {
         const name = error.name?.toLowerCase() ?? ''
@@ -75,6 +85,15 @@ function openAIChatModelPrefersMaxCompletionTokens(model: string): boolean {
     if (/^o\d/.test(m)) return true
     if (m.startsWith('gpt-5')) return true
     return false
+}
+
+/** Some OpenAI chat models reject the `stop` parameter (e.g. gpt-5.*, o-series). */
+function openAIChatModelSupportsStopParameter(model: string): boolean {
+    const m = model.trim().toLowerCase()
+    if (!m) return true
+    if (/^o\d/.test(m)) return false
+    if (m.startsWith('gpt-5')) return false
+    return true
 }
 
 function openAIChatTokenParamRetryPayload(error: unknown, payload: Record<string, unknown>): Record<string, unknown> | null {
@@ -289,17 +308,21 @@ class AIService {
     
         try {
             if (provider.type === 'claude') {
-                yield* this.streamClaudeText(client, {
+                const claudeRequest: Record<string, unknown> = {
                     model: provider.model,
                     max_tokens: options.maxTokens,
                     temperature: options.temperature,
-                    stop_sequences: options.stopSequences,
                     system: options.systemPrompt,
                     messages: [{
                         role: 'user',
                         content: options.userPrompt
                     }],
-                }, abortController)
+                }
+                const validStops = anthropicValidStopSequences(options.stopSequences)
+                if (validStops?.length) {
+                    claudeRequest.stop_sequences = validStops
+                }
+                yield* this.streamClaudeText(client, claudeRequest, abortController)
             } else {
                 const requestBody: any = {
                     model: provider.model,
@@ -324,7 +347,15 @@ class AIService {
                     }
                 }
 
-                if (options.stopSequences && options.stopSequences.length > 0) {
+                const stopAllowedForProvider =
+                    (provider.type !== 'openai' && provider.type !== 'azure')
+                    || openAIChatModelSupportsStopParameter(provider.model)
+
+                if (
+                    options.stopSequences &&
+                    options.stopSequences.length > 0 &&
+                    stopAllowedForProvider
+                ) {
                     requestBody.stop = options.stopSequences
                 }
 
